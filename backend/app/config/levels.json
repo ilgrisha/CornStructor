@@ -1,0 +1,38 @@
+[
+  {
+    "level": 0,
+    "fragment_min_size": 8000,
+    "fragment_max_size": 10000,
+    "min_children": 2,
+    "max_children": 6,
+    "overlap_min_size": 30,
+    "overlap_max_size": 50
+  },
+  {
+    "level": 1,
+    "fragment_min_size": 4000,
+    "fragment_max_size": 6000,
+    "min_children": 2,
+    "max_children": 6,
+    "overlap_min_size": 30,
+    "overlap_max_size": 50
+  },
+  {
+    "level": 2,
+    "fragment_min_size": 1000,
+    "fragment_max_size": 2000,
+    "min_children": 2,
+    "max_children": 6,
+    "overlap_min_size": 20,
+    "overlap_max_size": 35
+  },
+  {
+    "level": 3,
+    "fragment_min_size": 80,
+    "fragment_max_size": 120,
+    "min_children": 2,
+    "max_children": 10,
+    "overlap_min_size": 20,
+    "overlap_max_size": 35
+  }
+]

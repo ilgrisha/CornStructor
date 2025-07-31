@@ -1,20 +1,9 @@
 # File: backend/app/core/assembly/ga_overlap_selector.py
-# Version: v0.9.0
+# Version: v0.9.2
 
 """
 Genetic Algorithm to select orthogonal, specific overlaps between neighboring oligo bodies.
-Each overlap is defined by a substring (with absolute genomic coordinates) of the original sequence.
-The GA scores each candidate set of overlaps by:
-  1. Orthogonality: average and worst-case normalized edit distances between overlaps.
-  2. Mis-annealing: counting 3′-end binding events and k-mer collisions against full-length oligos,
-     for both the overlap and its reverse-complement
-  3. Rewarding each valid overlap segment.
-
-Key features:
-- Tournament selection, elitism, random injection.
-- Hill-climbing local search every N generations.
-- Enforces that chosen overlaps do not physically overlap in genomic coordinates.
-- Parallel fitness evaluation via ProcessPoolExecutor.
+Supports per-level overlap size bounds via constructor arguments.
 """
 
 import random
@@ -38,7 +27,7 @@ OVERLAP_SIZE_MAX      = 35
 
 # GA population parameters
 POPULATION_SIZE       = 200
-NUM_GENERATIONS       = 30
+NUM_GENERATIONS       = 5
 MUTATION_RATE_INITIAL = 0.35
 CROSSOVER_RATE        = 0.6
 ELITISM_COUNT         = 1
@@ -84,13 +73,17 @@ class GAOverlapSelector:
     """
 
     def __init__(self,
-                 full_sequence:    str,
-                 oligo_positions:  List[Tuple[int, int]],
-                 oligo_seqs:       List[str]):
+                 full_sequence:     str,
+                 oligo_positions:   List[Tuple[int, int]],
+                 oligo_seqs:        List[str],
+                 overlap_min_size:  int = OVERLAP_SIZE_MIN,
+                 overlap_max_size:  int = OVERLAP_SIZE_MAX):
         self.full_sequence      = full_sequence
         self.oligo_positions    = oligo_positions
         self.oligo_seqs         = oligo_seqs
         self.num_overlaps       = len(oligo_positions) - 1
+        self.overlap_min_size   = overlap_min_size
+        self.overlap_max_size   = overlap_max_size
         self.valid_overlap_sets = self.extract_valid_overlap_candidates()
         self.cpu_count          = max(1, int(multiprocessing.cpu_count() * 0.9))
         self.mutation_rate      = MUTATION_RATE_INITIAL
@@ -102,27 +95,26 @@ class GAOverlapSelector:
         absolute start/end coordinates.
         """
         N = len(self.full_sequence)
-        candidates: List[List[Tuple[str, int, int]]] = []
+        all_cands: List[List[Tuple[str,int,int]]] = []
 
         for i in range(self.num_overlaps):
             # define a search window around the junction
             _, end_i   = self.oligo_positions[i]
             start_j, _ = self.oligo_positions[i+1]
-            ws = max(0, end_i - OVERLAP_SIZE_MAX)
-            we = min(N,   start_j + OVERLAP_SIZE_MAX)
+            ws = max(0, end_i - self.overlap_max_size)
+            we = min(N, start_j + self.overlap_max_size)
             window = self.full_sequence[ws:we]
 
-            ovl_cands: List[Tuple[str, int, int]] = []
-            # slide windows of allowed lengths
-            for L in range(OVERLAP_SIZE_MIN, OVERLAP_SIZE_MAX + 1):
+            cands: List[Tuple[str, int, int]] = []
+            for L in range(self.overlap_min_size, self.overlap_max_size + 1):
                 for k in range(len(window) - L + 1):
                     abs_s = ws + k
                     abs_e = abs_s + L
                     seq   = self.full_sequence[abs_s:abs_e]
-                    ovl_cands.append((seq, abs_s, abs_e))
-            candidates.append(ovl_cands)
+                    cands.append((seq, abs_s, abs_e))
+            all_cands.append(cands)
 
-        return candidates
+        return all_cands
 
     def overlaps_disjoint(self, overlaps: List[Tuple[str, int, int]]) -> bool:
         """
@@ -250,9 +242,10 @@ class GAOverlapSelector:
         we simply clone parent1. Otherwise, pick a cut point and combine.
         Then repair any coordinate conflicts by re-sampling conflicting junctions.
         """
-        if random.random() > CROSSOVER_RATE:
+        # if there's no real crossover possible (<=1 junction) or we skip by rate, just clone parent1
+        if self.num_overlaps < 2 or random.random() > CROSSOVER_RATE:
             return OverlapChromosome(p1.overlaps[:])
-
+        # safe: num_overlaps >= 2, so (1, num_overlaps-1) is non-empty
         pt = random.randint(1, self.num_overlaps - 1)
         child_ov = p1.overlaps[:pt] + p2.overlaps[pt:]
 
@@ -280,14 +273,14 @@ class GAOverlapSelector:
         """
         for i in range(self.num_overlaps):
             if random.random() < self.mutation_rate:
-                original = chromo.overlaps[i]
+                orig = chromo.overlaps[i]
                 for _ in range(10):
                     cand = random.choice(self.valid_overlap_sets[i])
                     chromo.overlaps[i] = cand
                     if self.overlaps_disjoint(chromo.overlaps):
                         break
                 else:
-                    chromo.overlaps[i] = original  # revert if no valid found
+                    chromo.overlaps[i] = orig
 
     def evolve(self) -> Tuple[OverlapChromosome, List[float]]:
         """
