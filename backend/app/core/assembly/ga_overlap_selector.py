@@ -27,7 +27,7 @@ OVERLAP_SIZE_MAX      = 35
 
 # GA population parameters
 POPULATION_SIZE       = 200
-NUM_GENERATIONS       = 5
+NUM_GENERATIONS       = 3
 MUTATION_RATE_INITIAL = 0.35
 CROSSOVER_RATE        = 0.6
 ELITISM_COUNT         = 1
