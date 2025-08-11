@@ -1,18 +1,18 @@
 # File: backend/app/core/visualization/cluster_html_report.py
-# Version: v0.5.0
+# Version: v0.6.0
 
 """
 Generates level-specific HTML visualizations for FragmentNode trees.
 
 - Produces one HTML file per internal tree level (excluding leaves).
 - Uses oligo_html_visualizer to render aligned strand diagrams per cluster.
-- Includes GA progress logs if available.
+- Includes GA progress logs once per level (if available).
 - Creates an index.html linking to all level reports.
 - Can be run as a standalone script with a JSON input path.
 """
 
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import argparse
 
 from backend.app.core.models.fragment_node import FragmentNode
@@ -21,39 +21,52 @@ from backend.app.core.visualization.oligo_html_visualizer import (
     render_oligo_list,
     visualize_cluster_html,
     format_progress_log,
-    reverse_complement,
+    reverse_complement,   # unused directly here but kept if you log/debug
     MAX_VISIBLE_NT
 )
 
+# Type alias:
+# (fragment_id, cluster, parent_seq, ga_log, abs_start)
+ClusterBundle = Tuple[str, List[Tuple[str, str, int, int, str, str]], str, List[float], int]
 
-def collect_clusters_by_level(root: FragmentNode) -> dict[int, List[Tuple[str, List[Tuple[str, str, int, int, str, str]], str, List[float]]]]:
+
+def collect_clusters_by_level(root: FragmentNode) -> dict[int, List[ClusterBundle]]:
     """
     Traverse tree and group clusters by level.
 
     Returns:
-        Dict[level, List of tuples: (fragment_id, cluster, parent_seq, ga_log)]
+        Dict[level, List of tuples:
+            (
+              fragment_id: str,
+              cluster: List[(seq_full, strand, start_rel, end_rel, prev_ov, next_ov)],
+              parent_seq: str,
+              ga_log: List[float],
+              abs_start: int          # absolute start of the parent node (0-based)
+            )
+        ]
     """
-    levels: dict[int, List] = {}
+    levels: dict[int, List[ClusterBundle]] = {}
 
     def recurse(node: FragmentNode):
         children = getattr(node, "children", [])
         if not children:
             return
 
-        parent_start = node.start
+        parent_start = node.start  # absolute 0-based start of this (parent) fragment
+
         cluster = []
         for child in children:
             seq = child.seq
             strand = child.strand
-            start = child.start - parent_start
-            end = child.end - parent_start
+            start_rel = child.start - parent_start
+            end_rel   = child.end   - parent_start
             prev_ov = child.overlap_prev
             next_ov = child.overlap_next
             seq_full = seq if strand == "+" else reverse_complement(seq)
-            cluster.append((seq_full, strand, start, end, prev_ov, next_ov))
+            cluster.append((seq_full, strand, start_rel, end_rel, prev_ov, next_ov))
 
         levels.setdefault(node.level + 1, []).append(
-            (node.fragment_id, cluster, node.seq, node.ga_log)
+            (node.fragment_id, cluster, node.seq, node.ga_log, parent_start)
         )
 
         for c in children:
@@ -63,23 +76,34 @@ def collect_clusters_by_level(root: FragmentNode) -> dict[int, List[Tuple[str, L
     return levels
 
 
+def _cluster_bracket_abs(cluster: List[Tuple[str, str, int, int, str, str]], abs_start: int) -> str:
+    """
+    Compute [left – right] bracket in 1-based ABSOLUTE coordinates for a cluster block.
+    """
+    frag_left_rel  = min(c[2] for c in cluster)
+    frag_right_rel = max(c[3] for c in cluster)
+    left_disp  = abs_start + frag_left_rel + 1       # 1-based inclusive
+    right_disp = abs_start + frag_right_rel          # 1-based inclusive
+    return f"[{left_disp} – {right_disp}]"
+
+
 def export_level_html(
     level: int,
-    clusters: List[Tuple[str, List[Tuple[str, str, int, int, str, str]], str, List[float]]],
+    clusters: List[ClusterBundle],
     output_path: Path
 ) -> None:
     """
     Export all clusters at a given level to a single HTML file.
 
     Args:
-        level: Level index (1-based).
-        clusters: List of tuples per cluster: (fragment_id, cluster, full_seq, ga_log).
+        level: Level index (1-based from root’s children).
+        clusters: List of (fragment_id, cluster, full_seq, ga_log, abs_start).
         output_path: Path to write the HTML file.
     """
     html = [
         "<html><head><meta charset='UTF-8'><title>Oligo Clusters at Level {}</title>".format(level),
         "<style>",
-        ".mono{font-family:monospace;white-space:pre;display:inline-block;}",
+        ".mono{font-family:monospace;white-space:pre;display:block;}",
         ".oligo-list{margin:0 0 12px 16px;font-family:monospace;}",
         ".oligo-list li{margin-bottom:8px;}",
         f".scroll-box{{overflow-x:auto;white-space:nowrap;padding:8px;background:#f9f9f9;"
@@ -92,20 +116,30 @@ def export_level_html(
         f"<h1>🧬 Oligo Clusters at Level {level}</h1>"
     ]
 
-    for i, (fragment_id, cluster, parent_seq, ga_log) in enumerate(clusters, start=1):
-        html.append(f"<h2>Cluster {i} from fragment {fragment_id}</h2>")
-        html.append(render_oligo_list(fragment_id, i, cluster))
-        html.append("<div class='scroll-box'>")
-        html.append(visualize_cluster_html(fragment_id, i, cluster, parent_seq))
-        html.append("</div>")
-        if ga_log:
-            html.append(format_progress_log(ga_log))
+    # show GA once per level: pick the first non-empty log we find
+    level_ga_log: Optional[List[float]] = None
+
+    for i, (fragment_id, cluster, parent_seq, ga_log, abs_start) in enumerate(clusters, start=1):
+        bracket = _cluster_bracket_abs(cluster, abs_start)
+        html.append(f"<h2>Cluster {i} from fragment {fragment_id} {bracket}</h2>")
+        # Oligo list with ABS badges (1-based)
+        html.append(render_oligo_list(fragment_id, i, cluster, abs_start=abs_start))
+        # Alignment + ruler (abs_start drives 1-based ruler display)
+        html.append(visualize_cluster_html(fragment_id, i, cluster, parent_seq, abs_start=abs_start))
+
+        if (not level_ga_log) and ga_log:
+            level_ga_log = ga_log
+
+    if level_ga_log:
+        html.append("<hr>")
+        html.append("<h2>GA Progress (representative for this level)</h2>")
+        html.append(format_progress_log(level_ga_log))
 
     html.append("</body></html>")
     output_path.write_text("\n".join(html), encoding="utf-8")
 
 
-def export_index_html(levels: dict[int, List], out_path: Path) -> None:
+def export_index_html(levels: dict[int, List[ClusterBundle]], out_path: Path) -> None:
     """
     Export an index.html linking to all per-level HTML reports.
 
@@ -163,7 +197,7 @@ def main():
     """
     parser = argparse.ArgumentParser(description="Export per-level HTML cluster reports from a FragmentNode tree.")
     parser.add_argument("--json", required=True, type=Path, help="Path to input JSON file.")
-    parser.add_argument("--out", required=True, type=Path, help="Directory to save HTML files.")
+    parser.add_argument("--out",  required=True, type=Path, help="Directory to save HTML files.")
     args = parser.parse_args()
 
     print(f"Loading tree from: {args.json}")
