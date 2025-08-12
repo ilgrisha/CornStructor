@@ -1,15 +1,14 @@
 # File: backend/app/core/assembly/hierarchical_assembler.py
-# Version: v0.4.2
+# Version: v0.4.3
 
 """
 Hierarchical assembler: recursively subdivide a target sequence into fragments,
 compute overlaps between each layer’s children via GA, and build a tree of
 FragmentNode that you can later traverse or export via separate utilities.
 
-v0.4.2:
-- Fix regression where _build_children (and helpers) were omitted in v0.4.1.
-- Keeps import switch to use export_all_levels (per-level report set).
-- Integrates division-point retries, per-level gap, and advanced overlap filters.
+v0.4.3:
+- Minor log tweak: remove "gap<=..." wording now that the span gate is disabled
+  in GA (v1.2.0). Logs focus on length/Tm/GC/run only.
 """
 
 from pathlib import Path
@@ -47,12 +46,6 @@ class HierarchicalAssembler:
         global_cfg: Optional[GlobalConfig] = None,
         logger: Optional[logging.Logger] = None,
     ):
-        """
-        Args:
-            levels_cfg: mapping level index → LevelConfig (loaded from JSON).
-            global_cfg: global parameters (GA knobs, division-point adjustment, Tm params).
-            logger:     optional logger; if None, a module logger is used.
-        """
         self.levels = levels_cfg
         self.global_cfg = global_cfg or GlobalConfig()
         self.sequence_id: Optional[str] = None
@@ -98,14 +91,10 @@ class HierarchicalAssembler:
         cfg: LevelConfig,
     ):
         """
-        Try GA; if filters eliminate all candidates at a junction, attempt to
-        move that division cut several times per global config until success
-        or exhaustion, while respecting next-level child length bounds.
-
-        Returns:
-            (best_chromosome, progress_log, adjusted_positions, adjusted_bodies)
+        Try GA; if a junction filters down to zero candidates, attempt to move that cut
+        according to global retry policy. Returns GA best, log, and possibly adjusted positions.
         """
-        next_cfg = self.levels.get(level + 1)  # bounds for children (if any)
+        next_cfg = self.levels.get(level + 1)
         attempts_left = self.global_cfg.max_total_adjustment_rounds
 
         def make_ga(curr_positions: List[Tuple[int, int]]) -> GAOverlapSelector:
@@ -123,8 +112,9 @@ class HierarchicalAssembler:
                 run_max=cfg.overlap_run_max,
                 disallowed_motifs=cfg.overlap_disallowed_motifs,
                 allowed_motifs=cfg.overlap_allowed_motifs,
-                max_gap_allowed=cfg.max_gap_allowed,
-                enforce_span=self.global_cfg.enforce_span_across_junction,
+                # span gate removed in GA (kept args for compat, but not used)
+                max_gap_allowed=getattr(cfg, "max_gap_allowed", 0),
+                enforce_span=False,
                 tm_method=self.global_cfg.tm_method,
                 tm_params=self.global_cfg.tm_params_dict(),
                 ga_params=self.global_cfg.ga_params(),
@@ -134,9 +124,9 @@ class HierarchicalAssembler:
 
         while True:
             try:
-                ga = make_ga(positions)
+                # concise log (no "gap<=" wording anymore)
                 self.log.info(
-                    "Level %d: GA on %d junction(s); overlap %d-%d, Tm %s, GC %s, run %s, gap<=%d",
+                    "Level %d: GA on %d junction(s); overlap %d-%d, Tm %s, GC %s, run %s",
                     level,
                     len(positions) - 1,
                     cfg.overlap_min_size,
@@ -144,13 +134,12 @@ class HierarchicalAssembler:
                     f"{cfg.overlap_tm_min}-{cfg.overlap_tm_max}",
                     f"{cfg.overlap_gc_min}-{cfg.overlap_gc_max}",
                     f"{cfg.overlap_run_min}-{cfg.overlap_run_max}",
-                    cfg.max_gap_allowed or 0,
                 )
+                ga = make_ga(positions)
                 best, log = ga.evolve()
                 return best, log, positions, [full_seq[s:e] for s, e in positions]
 
             except NoOverlapCandidatesError as err:
-                # Log failing junction and constraint counts
                 self.log.warning(
                     ("Level %d: zero candidates at junction %d (cut %d|%d). "
                      "Reasons: %s"),
@@ -168,7 +157,7 @@ class HierarchicalAssembler:
                         f"Reasons: {err.formatted_reasons()}"
                     ) from err
 
-                # Try moving the specific division point while keeping children within size bounds
+                # retry: shift the failing cut in small steps (respect next-level size bounds)
                 j = err.junction_index
                 positions2 = positions[:]
                 cut = positions2[j][1]  # == positions2[j+1][0]
@@ -198,24 +187,14 @@ class HierarchicalAssembler:
                     positions_try[j + 1] = (new_cut, right_e)
 
                     try:
-                        ga_try = make_ga(positions_try)
                         self.log.info(
                             "Level %d: retry GA after shifting junction %d by %+d bp → cut @ %d",
-                            level,
-                            j,
-                            delta,
-                            new_cut,
+                            level, j, delta, new_cut
                         )
+                        ga_try = make_ga(positions_try)
                         best, log = ga_try.evolve()
                         return best, log, positions_try, [full_seq[s:e] for s, e in positions_try]
-                    except NoOverlapCandidatesError as err2:
-                        self.log.debug(
-                            "Level %d: still failing after delta %+d at junction %d; reasons: %s",
-                            level,
-                            delta,
-                            j,
-                            err2.formatted_reasons(),
-                        )
+                    except NoOverlapCandidatesError as _:
                         continue
 
                 attempts_left -= 1
@@ -266,21 +245,19 @@ class HierarchicalAssembler:
         parent_frag_index: int,
     ) -> List[FragmentNode]:
         """
-        Helper to build child nodes of fragment [start:end] at given level.
-        Returns a list of FragmentNode for this level’s children.
+        Build child nodes of fragment [start:end] at given level.
         """
         cfg = self.levels.get(level)
         L = end - start
 
-        # If no further subdivision, this is a leaf oligo
         if cfg is None or L < cfg.fragment_min_size:
             return []
 
-        # 1) determine number of children
+        # 1) number of children
         ideal_n = max(1, round(L / cfg.fragment_max_size))
         n = min(max(ideal_n, cfg.min_children), cfg.max_children)
 
-        # 2) Compute equally spaced child‐body boundaries
+        # 2) equal-spaced bodies
         bounds: List[Tuple[int, int]] = []
         for i in range(n):
             s_i = start + math.floor(i * L / n)
@@ -290,12 +267,12 @@ class HierarchicalAssembler:
         bodies = [full_seq[s:e] for s, e in bounds]
         positions = bounds
 
-        # 3) Run GA (with possible division-point adjustments on failure)
+        # 3) GA search (+ retries on failure)
         best, log, positions, bodies = self._run_ga_or_adjust(
             full_seq=full_seq, level=level, positions=positions, bodies=bodies, cfg=cfg
         )
 
-        # 4) compute extended bounds + overlap metadata per child
+        # 4) construct children with extended bounds from chosen overlaps
         children: List[FragmentNode] = []
         n = len(positions)
         for idx, ((s_i, e_i), body_seq) in enumerate(zip(positions, bodies)):
@@ -351,7 +328,6 @@ if __name__ == "__main__":
 
     # 2) read one sequence from FASTA:
     from Bio import SeqIO
-
     rec = next(SeqIO.parse("backend/data/input_sequences_rnd_9000.fasta", "fasta"))
     seq = str(rec.seq).upper()
     root_id = rec.id
