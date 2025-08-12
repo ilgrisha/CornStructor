@@ -1,5 +1,5 @@
 # File: backend/app/core/assembly/export_utils.py
-# Version: v0.2.0
+# Version: v0.2.1
 
 """
 Export utilities for HierarchicalAssembler.FragmentNode trees.
@@ -19,7 +19,7 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from backend.app.core.assembly.hierarchical_assembler import FragmentNode
+from backend.app.core.models.fragment_node import FragmentNode
 from backend.app.core.visualization.oligo_html_visualizer import (
     reverse_complement,
     render_oligo_list,
@@ -39,10 +39,7 @@ def _traverse(node: FragmentNode) -> List[FragmentNode]:
 def export_fragments_to_fasta(root: FragmentNode,
                               fasta_path: Path,
                               root_id: str) -> None:
-    """
-    Write every fragment (intermediate + leaf) as a FASTA record.
-    ID: <root_id>_lvl<level>_<start>_<end>
-    """
+    """Write every fragment (intermediate + leaf) as FASTA."""
     records: List[SeqRecord] = []
     for n in _traverse(root):
         rid = f"{root_id}_lvl{n.level}_{n.start}_{n.end}"
@@ -53,9 +50,7 @@ def export_fragments_to_fasta(root: FragmentNode,
 def export_tree_to_json(root: FragmentNode,
                         json_path: Path,
                         root_id: str) -> None:
-    """
-    Serialize the entire assembly tree (with overlaps) to nested JSON.
-    """
+    """Serialize the entire assembly tree (with overlaps) to nested JSON."""
     def node_dict(n: FragmentNode) -> Dict:
         return {
             "level":    n.level,
@@ -77,9 +72,7 @@ def export_tree_to_json(root: FragmentNode,
 def export_tree_to_html(root: FragmentNode,
                         html_path: Path,
                         root_id: str) -> None:
-    """
-    Render a simple nested‐list HTML of fragments and their overlaps.
-    """
+    """Render a simple nested‐list HTML tree."""
     def render_node(n: FragmentNode) -> str:
         header = f"Level {n.level}: {n.start}–{n.end} ({len(n.seq)} bp)"
         children_html = "".join(render_node(c) for c in getattr(n, "children", []))
@@ -104,12 +97,7 @@ def export_tree_to_html(root: FragmentNode,
 def export_clusters_and_fragments_html(root: FragmentNode,
                                        html_path: Path,
                                        root_id: str) -> None:
-    """
-    Combined report:
-      1) Top-level: nested‐list assembly tree.
-      2) For each internal node: visualize its children as a 'cluster'
-         (list + aligned strands + GA log).
-    """
+    """Combined assembly tree + per-level cluster visualizations."""
     html: List[str] = [
         "<html><head><meta charset='UTF-8'><title>Clusters & Fragments</title>",
         "<style>",
@@ -143,11 +131,9 @@ def export_clusters_and_fragments_html(root: FragmentNode,
             next_seq = getattr(child, "overlap_next", "")
             strand   = getattr(child, "strand", "+")
 
-            # Full fragment with overlaps
             full_seq = prev_seq + child.seq + next_seq
             full_seq = full_seq if strand == "+" else reverse_complement(full_seq)
 
-            # Relative start/end for display
             rel_start = child.start - n.start
             rel_end   = child.end - n.start
 

@@ -1,5 +1,5 @@
 # File: backend/app/core/visualization/oligo_html_visualizer.py
-# Version: v0.7.6
+# Version: v0.8.0
 
 """
 HTML visualization of full‐length oligo clusters.
@@ -10,10 +10,12 @@ Features:
       * absolute-position ruler (labels + ticks), 1-based for display
       * original sequence
       * top/bottom aligned strands
-  - Colored nucleotides.
+  - Colored nucleotides (+ graceful coloring for 'N').
   - Oligo list with IDs, orientation, and ABSOLUTE coordinate badges.
   - GA progress log (optional).
   - Responsive layout with maximum visible nucleotide width before scrolling.
+  - NEW (v0.8.0): visually highlight overlaps within each oligo in the list view:
+      left overlap, body, right overlap — correctly oriented for antisense.
 
 Notes:
   - Lines are stacked (not side-by-side) but scroll together horizontally.
@@ -31,22 +33,33 @@ LABEL_STEP     = 50   # numeric label every 50 bp
 
 
 def reverse_complement(seq: str) -> str:
-    complement = str.maketrans("ACGT", "TGCA")
+    """
+    Reverse-complement a DNA sequence consisting of A/C/G/T (case-insensitive safe upstream).
+    """
+    complement = str.maketrans("ACGTacgt", "TGCAtgca")
     return seq.translate(complement)[::-1]
 
 
 def color_nucleotide(nt: str) -> str:
+    """
+    Return a <span> with a color for a single nucleotide.
+    Includes a neutral gray for 'N' and black fallback for unexpected characters.
+    """
     cmap = {
         "A": "#d73027",  # red
         "C": "#4575b4",  # blue
         "G": "#1a9850",  # green
         "T": "#984ea3",  # purple
+        "N": "#777777",  # neutral gray for ambiguous
         "-": "#888888"   # grey for gaps
     }
-    return f"<span style='color:{cmap.get(nt, 'black')}'>{nt}</span>"
+    return f"<span style='color:{cmap.get(nt.upper(), 'black')}'>{nt}</span>"
 
 
 def color_sequence(seq: str) -> str:
+    """
+    Colorize a DNA sequence by mapping each nucleotide to a colored <span>.
+    """
     return "".join(color_nucleotide(n) for n in seq)
 
 
@@ -107,11 +120,82 @@ def _build_position_ruler(abs_left_display: int, length: int) -> Tuple[str, str]
     return label_line, tick_line
 
 
+def _segment_for_highlight(
+    seq_full: str,
+    strand: str,
+    prev_ov: str,
+    next_ov: str
+) -> Tuple[str, str, str]:
+    """
+    Split the FULL oligo sequence into (left_overlap, body, right_overlap) segments
+    suitable for highlighting in the list view. Handles antisense orientation by
+    mapping the correct overlap lengths to the left/right of the displayed sequence.
+
+    Args:
+        seq_full: full displayed sequence (already oriented for the strand)
+        strand:   '+' or '-'
+        prev_ov:  upstream overlap sequence (original orientation)
+        next_ov:  downstream overlap sequence (original orientation)
+
+    Returns:
+        (left_seg, body_seg, right_seg)
+    """
+    L = len(seq_full)
+    lp = len(prev_ov or "")
+    ln = len(next_ov or "")
+
+    if strand == "+":
+        left_len = lp
+        right_len = ln
+    else:
+        # full_seq for antisense is RC(prev + body + next) = RC(next) + RC(body) + RC(prev)
+        # so left segment corresponds to next, right segment to prev
+        left_len = ln
+        right_len = lp
+
+    # Clamp to sequence bounds to be safe
+    left_len = max(0, min(left_len, L))
+    right_len = max(0, min(right_len, L - left_len))
+    body_len = max(0, L - left_len - right_len)
+
+    left = seq_full[:left_len]
+    body = seq_full[left_len:left_len + body_len]
+    right = seq_full[left_len + body_len:]
+    return left, body, right
+
+
+def _color_with_overlap_highlight(
+    seq_full: str,
+    strand: str,
+    prev_ov: str,
+    next_ov: str
+) -> str:
+    """
+    Color the sequence and visually highlight the left/right overlaps with subtle backgrounds.
+    """
+    left, body, right = _segment_for_highlight(seq_full, strand, prev_ov, next_ov)
+
+    # Backgrounds for overlaps (soft hues that don't clash with base colors)
+    style_l = "background:rgba(255,215,0,0.18);border-radius:3px;padding:0 1px"   # golden tint
+    style_r = "background:rgba(64,224,208,0.18);border-radius:3px;padding:0 1px"  # turquoise tint
+
+    parts = []
+    if left:
+        parts.append(f"<span style='{style_l}'>{color_sequence(left)}</span>")
+    if body:
+        parts.append(color_sequence(body))
+    if right:
+        parts.append(f"<span style='{style_r}'>{color_sequence(right)}</span>")
+    return "".join(parts)
+
+
 def render_oligo_list(
     sid: str,
     ci: int,
     cluster: List[Tuple[str, str, int, int, str, str]],
-    abs_start: Optional[int] = None
+    abs_start: Optional[int] = None,
+    *,
+    highlight_overlaps: bool = True
 ) -> str:
     """
     Render a bullet list of all oligos with ABSOLUTE coordinate badges (1-based).
@@ -122,6 +206,8 @@ def render_oligo_list(
         cluster:   list of (seq_full, strand, start_rel, end_rel, prev_ov, next_ov)
         abs_start: absolute start (0-based) of the PARENT fragment. If None, badges
                    will show relative positions as +start..+end.
+        highlight_overlaps: if True, visually mark the left/right overlap segments
+                   in each displayed full oligo sequence.
 
     Note:
         For absolute badges we display inclusive ranges:
@@ -135,7 +221,7 @@ def render_oligo_list(
     )
 
     items = []
-    for oi, (seq, strand, start_rel, end_rel, *_ov) in enumerate(cluster, start=1):
+    for oi, (seq_full, strand, start_rel, end_rel, prev_ov, next_ov) in enumerate(cluster, start=1):
         oid = f"{sid}_c{ci}_o{oi}"
         lbl = "  sense  " if strand == "+" else "antisense"
 
@@ -147,11 +233,16 @@ def render_oligo_list(
             # fallback: relative (user-visible +offsets)
             badge = f"<span style='{badge_style}'>+{start_rel+1}–+{end_rel}</span>"
 
+        if highlight_overlaps:
+            colored = _color_with_overlap_highlight(seq_full, strand, prev_ov or "", next_ov or "")
+        else:
+            colored = color_sequence(seq_full)
+
         items.append(
             "<li>"
             f"<strong>{oid}</strong> ({lbl}) "
             f"{badge} : "
-            f"<span class='mono'>{color_sequence(seq)}</span>"
+            f"<span class='mono'>{colored}</span>"
             "</li>"
         )
 
@@ -205,14 +296,14 @@ def visualize_cluster_html(
 
     top = ["-"] * L
     bot = ["-"] * L
-    for seq, strand, start_rel, _end_rel, *_ in cluster:
+    for seq_full, strand, start_rel, _end_rel, *_ in cluster:
         rel = start_rel - fragment_start_rel
         if strand == "+":
-            for i, nt in enumerate(seq):
+            for i, nt in enumerate(seq_full):
                 if 0 <= rel + i < L:
                     top[rel + i] = nt
         else:
-            rc = reverse_complement(seq)
+            rc = reverse_complement(seq_full)
             for i, nt in enumerate(rc):
                 if 0 <= rel + i < L:
                     bot[rel + i] = nt
@@ -235,6 +326,9 @@ def visualize_cluster_html(
 
 
 def format_progress_log(log: List[float]) -> str:
+    """
+    Render a simple unordered list of GA progress values (one per generation).
+    """
     if not log:
         return ""
     items = "".join(f"<li>Gen {i+1}: {f:.1f}</li>" for i, f in enumerate(log))
@@ -244,14 +338,17 @@ def format_progress_log(log: List[float]) -> str:
 def export_html_report(
     output_path: Path,
     clusters_by_sequence: Dict[str, List[List[Tuple[str, str, int, int, str, str]]]],
-    ga_logs: Dict[str, List[float]] = None,
-    full_sequences: Dict[str, str] = None
+    ga_logs: Optional[Dict[str, List[float]]] = None,
+    full_sequences: Optional[Dict[str, str]] = None
 ) -> None:
     """
     Generic one-page report (used less now that you have per-level pages).
     Keeps existing behavior; no abs_start context here, so badges are relative.
     """
-    html = [
+    full_sequences = full_sequences or {}
+    ga_logs = ga_logs or {}
+
+    html_chunks = [
         "<html><head><meta charset='UTF-8'><title>Oligo Design Visualization</title>",
         "<style>",
         ".mono{font-family:monospace;white-space:pre;display:block;}",
@@ -268,7 +365,7 @@ def export_html_report(
     ]
 
     for sid, clusters in clusters_by_sequence.items():
-        html.append(f"<h2>Sequence: {sid}</h2>")
+        html_chunks.append(f"<h2>Sequence: {sid}</h2>")
         full_seq = full_sequences.get(sid, "")
         for ci, cluster in enumerate(clusters, start=1):
             # Compute bracket from relative visible region (1-based display)
@@ -279,12 +376,12 @@ def export_html_report(
             right_disp = left_disp + L - 1
             bracket = f"[{left_disp} – {right_disp}]"
 
-            html.append(f"<h3>Cluster {ci} {bracket}</h3>")
+            html_chunks.append(f"<h3>Cluster {ci} {bracket}</h3>")
             # Relative badges only (no abs_start context here)
-            html.append(render_oligo_list(sid, ci, cluster, abs_start=None))
-            html.append(visualize_cluster_html(sid, ci, cluster, full_seq, abs_start=None))
-        if ga_logs and sid in ga_logs:
-            html.append(format_progress_log(ga_logs[sid]))
+            html_chunks.append(render_oligo_list(sid, ci, cluster, abs_start=None))
+            html_chunks.append(visualize_cluster_html(sid, ci, cluster, full_seq, abs_start=None))
+        if sid in ga_logs:
+            html_chunks.append(format_progress_log(ga_logs[sid]))
 
-    html.append("</body></html>")
-    output_path.write_text("\n".join(html), encoding="utf-8")
+    html_chunks.append("</body></html>")
+    output_path.write_text("\n".join(html_chunks), encoding="utf-8")
