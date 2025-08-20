@@ -1,6 +1,6 @@
 {
   "ga": {
-    "population_size": 200,
+    "population_size": 20,
     "num_generations": 3,
     "mutation_rate_initial": 0.35,
     "crossover_rate": 0.6,
