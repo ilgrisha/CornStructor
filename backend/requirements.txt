@@ -1,0 +1,11 @@
+# File: backend/requirements.txt
+# Version: v0.2.0
+# Core scientific/GA stack
+biopython>=1.83
+# C-accelerated edit distance (preferred)
+edlib>=1.3.9.post1
+# Optional C++ fallback for Levenshtein distance
+rapidfuzz>=3.9.0
+# C-backed primer design thermodynamics
+primer3-py>=2.0.3
+pytest>=8.2.0

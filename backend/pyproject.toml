@@ -1,0 +1,11 @@
+# File: backend/pyproject.toml
+# Version: v0.1.0
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+select = ["E","F","I","UP"]
+ignore = []
+target-version = "py311"

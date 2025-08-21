@@ -1,8 +1,12 @@
 # File: backend/app/cli/assemble_cli.py
-# Version: v0.1.1
+# Version: v0.1.2
 
 """
 Command-line interface for hierarchical assembly.
+
+v0.1.2:
+- Updated imports: configuration loaders moved to backend.app.config.*
+- No behavior change.
 
 v0.1.1:
 - Switch to export_all_levels (per-level report set) instead of the old single
@@ -15,26 +19,28 @@ from pathlib import Path
 
 from Bio import SeqIO
 
-from backend.app.core.assembly.hierarchical_assembler import HierarchicalAssembler, AssemblerError
-from backend.app.core.config import load_levels_config
-from backend.app.core.config_global import load_global_config
+from backend.app.config.config_level import load_levels_config
+from backend.app.config.config_global import load_global_config
+from backend.app.core.assembly.hierarchical_assembler import (
+    HierarchicalAssembler,
+    AssemblerError,
+)
 from backend.app.core.export.fasta_exporter import export_fragments_to_fasta
 from backend.app.core.export.json_exporter import export_tree_to_json
 from backend.app.core.visualization.tree_html_exporter import export_tree_to_html
 from backend.app.core.visualization.cluster_html_report import export_all_levels
 
 
-def main():
-    ap = argparse.ArgumentParser(description="Hierarchical DNA assembly (CLI).")
-    ap.add_argument("--fasta", required=True, help="Input FASTA file with 1+ sequences.")
-    ap.add_argument("--levels", required=True, help="Per-level parameters JSON.")
-    ap.add_argument("--globals", required=False, help="Global GA/assembly parameters JSON.")
-    ap.add_argument("--outdir", required=True, help="Output directory.")
-    ap.add_argument("--log", default="INFO", help="Log level (DEBUG, INFO, WARNING, ERROR).")
-    args = ap.parse_args()
+def main() -> None:
+    p = argparse.ArgumentParser()
+    p.add_argument("--fasta", required=True, type=Path)
+    p.add_argument("--levels", required=True, type=Path)
+    p.add_argument("--globals", required=False, type=Path, help="Path to globals.json")
+    p.add_argument("--outdir", required=True, type=Path)
+    p.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+    args = p.parse_args()
 
-    logging.basicConfig(level=getattr(logging, args.log.upper(), logging.INFO),
-                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(level=getattr(logging, args.log_level))
     log = logging.getLogger("assemble_cli")
 
     fasta_path = Path(args.fasta)
@@ -46,7 +52,7 @@ def main():
     levels = load_levels_config(levels_path)
     gconf = load_global_config(globals_path)
 
-    # Process each record
+    # Process each FASTA record
     n_ok = 0
     n_fail = 0
     for rec in SeqIO.parse(str(fasta_path), "fasta"):
@@ -62,7 +68,7 @@ def main():
             export_tree_to_json(root, outdir / f"{root_id}_tree.json", root_id)
             export_tree_to_html(root, outdir / f"{root_id}_tree.html", root_id)
 
-            # New: per-level cluster reports in a directory
+            # Per-level cluster reports in a directory
             report_dir = outdir / f"{root_id}_cluster_reports"
             export_all_levels(root, report_dir, levels_cfg=levels, global_cfg=gconf)
 

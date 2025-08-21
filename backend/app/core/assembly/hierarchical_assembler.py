@@ -17,12 +17,11 @@ import logging
 from typing import List, Tuple, Dict, Optional
 
 from backend.app.core.models.fragment_node import FragmentNode
-from backend.app.core.config import LevelConfig, load_levels_config
-from backend.app.core.config_global import GlobalConfig, load_global_config
-from backend.app.core.assembly.ga_overlap_selector import (
-    GAOverlapSelector,
-    NoOverlapCandidatesError,
-)
+
+from backend.app.config.config_level import LevelConfig, load_levels_config
+from backend.app.config.config_global import GlobalConfig, load_global_config
+
+from backend.app.core.assembly.ga_overlap_selector import (GAOverlapSelector,NoOverlapCandidatesError,)
 from backend.app.core.visualization.oligo_html_visualizer import reverse_complement
 
 from backend.app.core.export.fasta_exporter import export_fragments_to_fasta
