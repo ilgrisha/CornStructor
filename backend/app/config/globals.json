@@ -1,6 +1,6 @@
 {
   "ga": {
-    "population_size": 50,
+    "population_size": 30,
     "num_generations": 10,
     "mutation_rate_initial": 0.35,
     "crossover_rate": 0.6,
@@ -11,7 +11,10 @@
     "hill_climb_period": 5,
     "hill_climb_junc": 2,
     "hill_climb_cands": 10,
-    "allowed_motif_scale": 1.0
+    "allowed_motif_scale": 1.0,
+
+    "enable_early_stop": true,
+    "early_stop_multiplier": 3.0
   },
 
   "cpu_workers_fraction": 0.9,

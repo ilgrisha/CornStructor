@@ -1,21 +1,23 @@
 # File: backend/app/config/config_global.py
-# Version: v0.3.2
+# Version: v0.3.3
 
 """
 Global configuration loader (attribute-access "view" objects).
 
+v0.3.3
+- Expose GA early-stop knobs from JSON:
+  * `ga.enable_early_stop` (bool, default True)
+  * `ga.early_stop_multiplier` (float, default 3.0)
+
 v0.3.2
-- Back-compat shims for assembler:
-  * `tm_params_dict()` → returns the thermo params dict (mM/nM)
-  * `tm_method_str()`  → returns the selected Tm method string
-- Keep legacy `load_global_config(path)` import for the CLI.
+- Back-compat shims for assembler: tm_params_dict(), tm_method_str()
+- Legacy `load_global_config(path)` for CLI import.
 
 v0.3.1
-- Added legacy shim `load_global_config(path)` so older CLIs can import it.
+- Legacy shim `load_global_config(path)`.
 
 v0.3.0
-- Introduced GA perf knobs from JSON: `ga.workers` and `ga.batch_chunk_size`.
-- Back-compat derivation of workers from `cpu_workers_fraction` when missing or 0.
+- Perf knobs: ga.workers, ga.batch_chunk_size (workers derived from cpu_workers_fraction if 0/missing).
 """
 
 from __future__ import annotations
@@ -51,6 +53,10 @@ class GAParamsView:
     workers: int              # >=0; 0 means "auto" (selector decides)
     batch_chunk_size: int     # chunk size for batch helpers
 
+    # Early-stop knobs (new in v0.3.3)
+    enable_early_stop: bool
+    early_stop_multiplier: float
+
     @staticmethod
     def _cpu_count() -> int:
         try:
@@ -68,7 +74,9 @@ class GAParamsView:
         """
         Build a GA params view from a dict. If 'workers' is 0 or missing,
         derive it from `cpu_workers_fraction` (if provided).
+        Also wires early-stop knobs with safe defaults.
         """
+        # Perf fields
         workers_raw = int(d.get("workers", 0))
         chunk = int(d.get("batch_chunk_size", 128))
 
@@ -78,6 +86,10 @@ class GAParamsView:
             workers = derived
         else:
             workers = max(0, workers_raw)  # keep 0 for selector auto
+
+        # Early-stop (defaults mirror GAOverlapSelector)
+        enable_early_stop = bool(d.get("enable_early_stop", True))
+        early_stop_multiplier = float(d.get("early_stop_multiplier", 3.0))
 
         return cls(
             population_size=int(d["population_size"]),
@@ -94,6 +106,8 @@ class GAParamsView:
             allowed_motif_scale=float(d.get("allowed_motif_scale", 1.0)),
             workers=workers,
             batch_chunk_size=max(1, chunk),
+            enable_early_stop=enable_early_stop,
+            early_stop_multiplier=early_stop_multiplier,
         )
 
 
@@ -143,6 +157,7 @@ class GlobalConfig:
         Return a resolved GA params view:
           - workers >0 honored; 0/missing derived from cpu_workers_fraction
           - batch_chunk_size defaulted to 128 if missing
+          - early-stop knobs exposed with defaults if missing
         """
         return GAParamsView.from_dict(self._ga_raw, cpu_workers_fraction=self._cpu_workers_fraction)
 
@@ -167,8 +182,7 @@ class GlobalConfig:
 
 def load_global_config(path: str) -> GlobalConfig:
     """
-    Legacy helper used by `assemble_cli.py`:
-    Equivalent to `GlobalConfig.from_json_file(path)`.
+    Legacy helper used by `assemble_cli.py`.
     """
     return GlobalConfig.from_json_file(path)
 
