@@ -1,7 +1,7 @@
 {
   "ga": {
-    "population_size": 20,
-    "num_generations": 3,
+    "population_size": 50,
+    "num_generations": 10,
     "mutation_rate_initial": 0.35,
     "crossover_rate": 0.6,
     "elitism_count": 1,
@@ -15,7 +15,6 @@
   },
 
   "cpu_workers_fraction": 0.9,
-  "enforce_span_across_junction": true,
 
   "max_total_adjustment_rounds": 2,
   "division_adjust_attempts_per_junction": 4,
