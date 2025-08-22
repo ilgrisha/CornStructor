@@ -257,6 +257,9 @@ class GAOverlapSelector:
         self._boost_events: List[int] = []
         self._restart_events: List[int] = []
 
+        # Per-generation progress details (filled by evolve())
+        self.progress_detail: List[Dict[str, float]] = []
+
         # Log resolved runtime knobs
         logger.info(
             "GAOverlapSelector init: workers=%d, batch_chunk_size=%d, pop=%d, gens=%d, tm=%s",
@@ -450,9 +453,12 @@ class GAOverlapSelector:
         """
         Run the GA and return the best chromosome and a per-generation best-fitness log.
         Also stores a `RunSummary` in `self.last_run_summary` and logs it at INFO.
+        Detailed per-generation stats (best, mean, std) are available via `self.progress_detail`.
         """
         population = self.initial_population()
         progress_log: List[float] = []
+        # Reset detailed progress for this run
+        self.progress_detail = []
         prev_best = float("-inf")
         gens = max(1, int(self.ga.num_generations))
         self.mutation_rate = self.ga.mutation_rate_initial
@@ -486,6 +492,13 @@ class GAOverlapSelector:
             uniq_pct = 100.0 * unique_sets / max(1, pop_size)
             impr = (best_f - prev_best) if prev_best != float("-inf") else 0.0
             progress_log.append(best_f)
+            # Record detailed progress exactly once per generation (before hill-climb/restarts for this gen)
+            self.progress_detail.append({
+                "gen": float(gen),
+                "best": float(best_f),
+                "mean": float(mean_f),
+                "std": float(std_f),
+            })
 
             # Log generation summary
             logger.info(

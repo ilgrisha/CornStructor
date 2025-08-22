@@ -24,4 +24,6 @@ class FragmentNode:
     overlap_next:  str                # downstream overlap
     is_oligo:      bool               # True if this is a leaf (no further subdivision)
     ga_log:        List[float]        = field(default_factory=list)
+    ga_detail:     List[dict]         = field(default_factory=list)  # per-generation stats: {gen,best,mean,std}
+    ga_cluster_id: str                = ""  # stable id to group siblings' GA run (unique per parent cluster)
     children:      List["FragmentNode"] = field(default_factory=list)

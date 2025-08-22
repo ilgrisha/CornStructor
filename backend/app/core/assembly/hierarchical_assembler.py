@@ -28,6 +28,8 @@ from backend.app.core.export.fasta_exporter import export_fragments_to_fasta
 from backend.app.core.export.json_exporter import export_tree_to_json
 from backend.app.core.visualization.tree_html_exporter import export_tree_to_html
 from backend.app.core.visualization.cluster_html_report import export_all_levels
+from backend.app.core.export.analysis_exporter import analyze_tree_to_json
+from backend.app.core.visualization.analysis_html_report import export_analysis_html
 
 
 class AssemblerError(RuntimeError):
@@ -136,7 +138,8 @@ class HierarchicalAssembler:
                 )
                 ga = make_ga(positions)
                 best, log = ga.evolve()
-                return best, log, positions, [full_seq[s:e] for s, e in positions]
+                ga_detail = getattr(ga, "progress_detail", [])
+                return best, log, positions, [full_seq[s:e] for s, e in positions], ga_detail
 
             except NoOverlapCandidatesError as err:
                 self.log.warning(
@@ -192,7 +195,8 @@ class HierarchicalAssembler:
                         )
                         ga_try = make_ga(positions_try)
                         best, log = ga_try.evolve()
-                        return best, log, positions_try, [full_seq[s:e] for s, e in positions_try]
+                        ga_detail = getattr(ga_try, "progress_detail", [])
+                        return best, log, positions_try, [full_seq[s:e] for s, e in positions_try], ga_detail
                     except NoOverlapCandidatesError as _:
                         continue
 
@@ -267,7 +271,7 @@ class HierarchicalAssembler:
         positions = bounds
 
         # 3) GA search (+ retries on failure)
-        best, log, positions, bodies = self._run_ga_or_adjust(
+        best, log, positions, bodies, ga_detail = self._run_ga_or_adjust(
             full_seq=full_seq, level=level, positions=positions, bodies=bodies, cfg=cfg
         )
 
@@ -306,6 +310,8 @@ class HierarchicalAssembler:
                 overlap_next=next_seq,
                 is_oligo=is_leaf,
                 ga_log=log,
+                ga_detail=ga_detail,
+                ga_cluster_id=f"S-{self.sequence_id}_L-{level}_S-{start}_E-{end}",
                 children=[],
             )
 
@@ -339,4 +345,11 @@ if __name__ == "__main__":
     export_fragments_to_fasta(root, Path("backend/data/out/tree_fragments.fasta"), root_id)
     export_tree_to_json(root, Path("backend/data/out/tree_fragments.json"), root_id)
     export_tree_to_html(root, Path("backend/data/out/tree_fragments.html"), root_id)
+
+    # 4b) analysis JSON + HTML report (mirrors CLI behavior)
+    analysis_json = Path("backend/data/out/tree_analysis.json")
+    analysis_html = Path("backend/data/out/tree_analysis.html")
+    payload = analyze_tree_to_json(root, analysis_json, root_id)
+    export_analysis_html(payload, analysis_html)
+
     export_all_levels(root, Path("backend/data/out/cluster_reports"), levels, gconf)
