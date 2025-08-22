@@ -1,8 +1,12 @@
 # File: backend/app/cli/assemble_cli.py
-# Version: v0.1.2
+# Version: v0.2.0
 
 """
 Command-line interface for hierarchical assembly.
+
+v0.2.0:
+- Integrated analysis_exporter (JSON) and analysis_html_report (HTML) immediately after best tree is created.
+- Clarified output filenames: *_analysis.json and *_analysis.html.
 
 v0.1.2:
 - Updated imports: configuration loaders moved to backend.app.config.*
@@ -29,6 +33,10 @@ from backend.app.core.export.fasta_exporter import export_fragments_to_fasta
 from backend.app.core.export.json_exporter import export_tree_to_json
 from backend.app.core.visualization.tree_html_exporter import export_tree_to_html
 from backend.app.core.visualization.cluster_html_report import export_all_levels
+from backend.app.core.export.analysis_exporter import analyze_tree_to_json
+from backend.app.core.visualization.analysis_html_report import export_analysis_html
+from backend.app.core.export.ga_progress_exporter import export_ga_progress_json
+from backend.app.core.visualization.ga_progress_html_report import export_ga_progress_html
 
 
 def main() -> None:
@@ -67,6 +75,18 @@ def main() -> None:
             export_fragments_to_fasta(root, outdir / f"{root_id}_fragments.fasta", root_id)
             export_tree_to_json(root, outdir / f"{root_id}_tree.json", root_id)
             export_tree_to_html(root, outdir / f"{root_id}_tree.html", root_id)
+
+            # Analysis: JSON + HTML
+            analysis_json_path = outdir / f"{root_id}_analysis.json"
+            analysis_html_path = outdir / f"{root_id}_analysis.html"
+            analysis_payload = analyze_tree_to_json(root, analysis_json_path, root_id)
+            export_analysis_html(analysis_payload, analysis_html_path)
+
+            # GA progress: JSON + HTML
+            ga_json_path = outdir / f"{root_id}_ga_progress.json"
+            ga_html_path = outdir / f"{root_id}_ga_progress.html"
+            ga_payload = export_ga_progress_json(root, ga_json_path, root_id)
+            export_ga_progress_html(ga_payload, ga_html_path)
 
             # Per-level cluster reports in a directory
             report_dir = outdir / f"{root_id}_cluster_reports"
