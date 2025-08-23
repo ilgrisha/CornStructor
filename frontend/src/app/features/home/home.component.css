@@ -1,0 +1,21 @@
+/*
+ * Path: frontend/src/app/features/home/home.component.css
+ * Version: v0.7.0
+ */
+
+.layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 360px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  grid-template-areas:
+    "left right"
+    "bottom bottom";
+  padding: 16px;
+}
+
+.left { grid-area: left; }
+.right { grid-area: right; }
+.bottom { grid-area: bottom; }
+
+.stack { display: grid; gap: 16px; }

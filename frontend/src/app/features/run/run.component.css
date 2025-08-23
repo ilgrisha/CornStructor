@@ -1,0 +1,46 @@
+/*
+ * Path: frontend/src/app/features/run/run.component.css
+ * Version: v0.5.0
+ */
+
+.btn-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.btn {
+  appearance: none;
+  border: none;
+  background: #0a84ff;
+  color: white;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0,0,0,.08);
+  cursor: pointer;
+}
+.btn[disabled] { opacity: .6; cursor: default; }
+
+.link {
+  color: #0a84ff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.log-title { font-weight: 600; margin: 10px 0 6px; color: #555; }
+.log-box {
+  background: #f6f7f9;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px;
+  max-height: 260px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.line { display: flex; gap: 8px; }
+.idx { color:#8a8a8a; width: 2ch; text-align:right; }
+.txt { white-space: pre-wrap; }

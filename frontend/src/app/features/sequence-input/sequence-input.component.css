@@ -1,0 +1,29 @@
+/*
+ * Path: frontend/src/app/features/sequence-input/sequence-input.component.css
+ * Version: v1.6.0
+ */
+.row { display: grid; grid-template-columns: 1fr 240px; gap: 12px; }
+.col.meta { font-size: 13px; color:#3a3a3c; }
+.seqbox {
+  width: 100%;
+  min-height: 160px;
+  font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.5;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  outline: none;
+  resize: vertical;
+}
+.seqbox:focus { border-color:#0a84ff; box-shadow: 0 0 0 3px rgba(10,132,255,.15); }
+.toolbar {
+  display:flex; gap:10px; align-items:center; margin-top:8px; color:#636366;
+}
+.file input[type="file"] { display:none; }
+.file {
+  padding: 4px 10px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; cursor:pointer;
+}
+.caret { margin-left:auto; }
+.len { margin-left:10px; }
+.badge.bad { color:#ff3b30; border:1px solid #ffd1d1; background:#fff4f4; padding:2px 8px; border-radius:999px; display:inline-block; }
+.help { margin-top:8px; color:#8e8e93; }

@@ -1,0 +1,18 @@
+<!--
+  Path: frontend/src/app/features/results/results.component.html
+  Version: v0.8.0
+-->
+<app-card title="Analysis & Visualization" subtitle="Select a feature → pick a region → see it highlighted below">
+  <div class="toprow">
+    <div class="left">
+      <app-feature-picker></app-feature-picker>
+      <div class="stats">
+        <div><strong>Length:</strong> {{ len() | number }} bp</div>
+        <div class="muted">Invalid: {{ stats().invalid }}, Homopolymers: {{ stats().homos }}, GC low/high: {{ stats().gcLow }}/{{ stats().gcHigh }}, Low complexity: {{ stats().entropyLow }}, Repeats: {{ stats().repeats }}</div>
+      </div>
+    </div>
+    <div class="right">
+      <app-sequence-view></app-sequence-view>
+    </div>
+  </div>
+</app-card>

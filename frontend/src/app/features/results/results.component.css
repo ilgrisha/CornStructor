@@ -1,0 +1,7 @@
+/*
+ * Path: frontend/src/app/features/results/results.component.css
+ * Version: v0.8.0
+ */
+.toprow { display:grid; grid-template-columns: 300px 1fr; gap:16px; }
+.stats { margin-top:10px; font-size:13px; }
+.muted { color:#636366; }

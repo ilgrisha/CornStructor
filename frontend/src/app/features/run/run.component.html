@@ -1,0 +1,26 @@
+<!--
+  Path: frontend/src/app/features/run/run.component.html
+  Version: v0.5.0
+-->
+<app-card title="Construction Tree Design" subtitle="Start the backend job and stream logs">
+  <div class="btn-row">
+    <button class="btn" [disabled]="busy" (click)="start()">
+      <span *ngIf="!busy">▶ Start Design</span>
+      <span *ngIf="busy">… Starting</span>
+    </button>
+
+    <a *ngIf="api.resultLink()" class="link" [href]="api.resultLink()" target="_blank" rel="noopener">
+      Open results page ↗
+    </a>
+  </div>
+
+  <div class="log" *ngIf="api.logLines().length">
+    <div class="log-title">Live log</div>
+    <div class="log-box">
+      <div class="line" *ngFor="let line of api.logLines(); let i = index">
+        <span class="idx">{{ i + 1 | number:'2.0' }}</span>
+        <span class="txt">{{ line }}</span>
+      </div>
+    </div>
+  </div>
+</app-card>

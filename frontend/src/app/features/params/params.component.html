@@ -1,0 +1,48 @@
+<app-card title="Parameters" subtitle="Analysis controls">
+  <div class="group">
+    <div class="g-head">Show features</div>
+    <label><input type="checkbox" [checked]="tog().homopolymers" (change)="toggle('homopolymers', $event)"> Homopolymers</label><br>
+    <label><input type="checkbox" [checked]="tog().gc"           (change)="toggle('gc', $event)"> GC% out-of-range</label><br>
+    <label><input type="checkbox" [checked]="tog().entropy"      (change)="toggle('entropy', $event)"> Low complexity</label><br>
+    <label><input type="checkbox" [checked]="tog().repeats"      (change)="toggle('repeats', $event)"> Repeats</label>
+  </div>
+
+  <div class="group">
+    <div class="g-head">Homopolymers</div>
+    <label>Min length
+      <input type="number" min="2" [value]="p().homoMin" (input)="updateNum('homoMin',$event)">
+    </label>
+  </div>
+
+  <div class="group">
+    <div class="g-head">GC% (sliding window)</div>
+    <label>Window
+      <input type="number" min="5" [value]="p().gcWindow" (input)="updateNum('gcWindow',$event)">
+    </label>
+    <div class="row">
+      <label>Min <input type="number" step="1" [value]="p().gcMin" (input)="updateNum('gcMin',$event)"></label>
+      <label>Max <input type="number" step="1" [value]="p().gcMax" (input)="updateNum('gcMax',$event)"></label>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="g-head">Low complexity (Shannon)</div>
+    <label>Window
+      <input type="number" min="5" [value]="p().entropyWindow" (input)="updateNum('entropyWindow',$event)">
+    </label>
+    <label>Entropy min (bits)
+      <input type="number" step="0.1" [value]="p().entropyMin" (input)="updateNum('entropyMin',$event)">
+    </label>
+  </div>
+
+  <div class="group">
+    <div class="g-head">Repeats (tandem)</div>
+    <div class="row">
+      <label>k min <input type="number" min="1" [value]="p().repeatKmin" (input)="updateNum('repeatKmin',$event)"></label>
+      <label>k max <input type="number" min="1" [value]="p().repeatKmax" (input)="updateNum('repeatKmax',$event)"></label>
+    </div>
+    <label>Min repeats
+      <input type="number" min="2" [value]="p().repeatMinReps" (input)="updateNum('repeatMinReps',$event)">
+    </label>
+  </div>
+</app-card>

@@ -1,0 +1,7 @@
+.group{ margin-bottom:14px; }
+.g-head{ font-weight:600; margin-bottom:6px; }
+label{ font-size:13px; color:#1d1d1f; display:block; margin:6px 0; }
+input[type="number"]{
+  margin-left:8px; width:96px; padding:4px 6px; border:1px solid #e5e5ea; border-radius:8px;
+}
+.row{ display:flex; gap:12px; align-items:center; }

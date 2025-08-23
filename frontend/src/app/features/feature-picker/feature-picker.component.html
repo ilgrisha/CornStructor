@@ -1,0 +1,37 @@
+<!--
+  Path: frontend/src/app/features/feature-picker/feature-picker.component.html
+  Version: v1.0.0
+-->
+<div class="picker">
+  <div class="group">
+    <div class="title">Features</div>
+    <div class="kinds">
+      <button *ngFor="let k of kinds"
+              class="kind"
+              [ngClass]="{active: isKindActive(k)}"
+              (click)="pickKind(k)">
+        <span class="dot" [style.background]="color(k)"></span>
+        <span class="name">{{ k }}</span>
+        <span class="count">{{ counts()[k] }}</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="group" *ngIf="rows().length">
+    <div class="title">Detected regions</div>
+    <div class="rows">
+      <button *ngFor="let r of rows(); index as i"
+              class="row"
+              [ngClass]="{active: isRowActive(i)}"
+              (click)="pickRow(i)">
+        <span>#{{ i + 1 }}</span>
+        <span>{{ r.start + 1 }}–{{ r.end }}</span>
+        <span class="len">{{ r.len }} bp</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="empty" *ngIf="a.selectedFeature() && !rows().length">
+    No regions detected for {{ a.selectedFeature() }}.
+  </div>
+</div>

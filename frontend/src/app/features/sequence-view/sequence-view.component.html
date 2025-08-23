@@ -1,0 +1,32 @@
+<!--
+  Path: frontend/src/app/features/sequence-view/sequence-view.component.html
+  Version: v1.1.0
+-->
+<div class="legend">
+  <span class="chip ntA">A</span>
+  <span class="chip ntC">C</span>
+  <span class="chip ntG">G</span>
+  <span class="chip ntT">T</span>
+</div>
+
+<div class="seqbox">
+  <div class="line" *ngFor="let L of lines()">
+    <span class="coord">{{ coord(L.start, L.end) }}</span>
+    <span class="nts">
+      <ng-container *ngFor="let cell of buildLine(L.start, L.end)">
+        <span class="nt" [ngClass]="cell.cls" [ngStyle]="cell.style">{{ cell.ch }}</span>
+      </ng-container>
+    </span>
+  </div>
+</div>
+
+<div class="selected" *ngIf="selectedSnippet() as s">
+  <div class="title">
+    Selected region:
+    <strong>{{ s.kind }}</strong>
+    <span>({{ s.start + 1 }}–{{ s.end }}, {{ s.len }} bp)</span>
+  </div>
+  <div class="snippet" [ngStyle]="{'border-color': s.color}">
+    <span class="nt" *ngFor="let ch of s.text.split('')" [ngClass]="['nt', 'nt' + ch]">{{ ch }}</span>
+  </div>
+</div>
