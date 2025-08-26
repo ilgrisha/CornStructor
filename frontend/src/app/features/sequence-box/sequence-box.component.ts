@@ -1,14 +1,11 @@
 /* ============================================================================
  * Path: frontend/src/app/features/sequence-box/sequence-box.component.ts
- * Version: v2.5.0
+ * Version: v2.7.0
  * ============================================================================
- * - Dynamic per-line width (fits container; perfect 1ch alignment)
- * - Single interactive box (type/paste A/C/G/T, FASTA upload)
- * - Visible blinking caret; keyboard nav & editing
- * - Mouse selection across multiple lines; copy/cut/paste/replace
- * - Smooth scroll to center on selected feature-range change
- * - Bars: faint “all ranges” (optional), solid selected-range
- * - Meta (length/selected/cursor/FASTA) shown under the box
+ * ADD: Visible 1ch-aligned caret (blinking) rendered as an overlay grid with
+ *      len+1 columns so it can sit between bases and after the last base.
+ * KEEP: Custom multi-line selection/copy/paste, responsive per-line width,
+ *       ticks+ruler+bars perfect alignment.
  * ==========================================================================*/
 import {
   Component, computed, effect, signal, WritableSignal,
@@ -21,9 +18,11 @@ type Cell = { ch: string; cls: string; abs: number };
 type Line = {
   start: number;
   cells: Cell[];
+  tick: boolean[];
   ruler: string[];
   barAll: boolean[];
   barSel: boolean[];
+  caret: boolean[];   // len+1; true where caret should be drawn for this line
 };
 
 @Component({
@@ -34,61 +33,71 @@ type Line = {
   styleUrls: ['./sequence-box.component.css']
 })
 export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
-  constructor(public a: AnalysisService) {
-    // re-run grid when deps change
-    effect(() => { void this.lines(); });
-
-    // center-scroll when a feature range is selected from the table
-    effect(() => {
-      const r = this.selRange();
-      if (r) {
-        // move caret to the beginning of the selected range
-        this.cursorPos.set(r.start);
-        this.clearSelection();
-        this.scheduleScrollTo(r.start);
-      }
-    });
-  }
+  constructor(public a: AnalysisService) { effect(() => { void this.lines(); }); }
 
   @ViewChild('viz', { static: true }) viz!: ElementRef<HTMLDivElement>;
   private ro?: ResizeObserver;
   private winHandler = () => this.measureAndSetLineWidth();
 
-  // ---- layout & state
   lineWidth: WritableSignal<number> = signal(80);
   hideAllWhenSelected: WritableSignal<boolean> = signal(true);
 
-  // caret + selection (absolute indices; selectionEnd is exclusive)
+  // caret / selection / validity
   cursorPos = signal<number>(0);
-  private selecting = false;
-  private selectionAnchor: number | null = null;
-  private selectionFocus: number | null = null;
-
-  // invalid stats
   hasInvalid = computed(() => this.a.invalid().some(v => v));
   invalidCount = computed(() => this.a.invalid().reduce((s, v) => s + (v ? 1 : 0), 0));
 
-  // FASTA meta
   private _lastFastaName: WritableSignal<string | null> = signal(null);
   private _lastFastaId: WritableSignal<string | null> = signal(null);
   lastFastaName = computed(() => this._lastFastaName());
   lastFastaId = computed(() => this._lastFastaId());
 
-  // selected feature ranges from service
+  private selStart: WritableSignal<number | null> = signal(null);
+  private selEnd: WritableSignal<number | null> = signal(null);
+  private anchor: WritableSignal<number | null> = signal(null);
+  private dragging = false;
+
+  selRangeAbs = computed<{ lo: number; hi: number } | null>(() => {
+    const s = this.selStart(); const e = this.selEnd();
+    if (s == null || e == null || s === e) return null;
+    return s < e ? { lo: s, hi: e } : { lo: e, hi: s };
+  });
+
   selRanges = this.a.selectedRegions;
   selRange = this.a.selectedRange;
 
-  // grid lines
   lines = computed<Line[]>(() =>
     this.buildLines(
       this.a.sequence().toUpperCase(),
       this.selRanges(),
       this.selRange(),
-      this.lineWidth()
+      this.lineWidth(),
+      this.cursorPos()   // include caret so we recompute when it moves
     )
   );
 
-  // --- UI handlers
+  // ---------- selection helpers ----------
+  isSelected(abs: number): boolean {
+    const r = this.selRangeAbs();
+    return !!r && abs >= r.lo && abs < r.hi;
+  }
+  clearSelection() {
+    this.selStart.set(null); this.selEnd.set(null); this.anchor.set(null);
+  }
+  setCollapsedCaret(pos: number) {
+    this.cursorPos.set(pos);
+    this.clearSelection();
+  }
+  private setSelectionFromAnchor(toAbsInclusive: number) {
+    const anc = this.anchor();
+    if (anc == null) return;
+    this.selStart.set(anc);
+    this.selEnd.set(toAbsInclusive + 1); // half-open [lo, hi)
+    const hi = Math.max(anc, toAbsInclusive) + 1;
+    this.cursorPos.set(hi); // caret to end
+  }
+
+  // ---------- UI handlers ----------
   onHideAllToggle(ev: Event) {
     const checked = (ev.target as HTMLInputElement).checked;
     this.hideAllWhenSelected.set(checked);
@@ -101,7 +110,6 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
     const reader = new FileReader();
     reader.onload = () => {
       const text = String(reader.result ?? '');
-      // basic FASTA parse (first record)
       const m = /^>([^\n\r]*)[\r\n]+([\s\S]*)$/m.exec(text);
       let id: string | null = null;
       let seq = text;
@@ -122,226 +130,135 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
     this.ro = new ResizeObserver(() => this.measureAndSetLineWidth());
     this.ro.observe(this.viz.nativeElement);
     window.addEventListener('resize', this.winHandler);
-
-    // selection end on mouseup anywhere
-    window.addEventListener('mouseup', this.onGlobalMouseUp, true);
-
-    // focus to enable typing immediately
+    window.addEventListener('mouseup', this.onWindowMouseUp, true);
     setTimeout(() => this.viz.nativeElement.focus());
   }
   ngOnDestroy(): void {
     this.ro?.disconnect();
     window.removeEventListener('resize', this.winHandler);
-    window.removeEventListener('mouseup', this.onGlobalMouseUp, true);
+    window.removeEventListener('mouseup', this.onWindowMouseUp, true);
   }
 
-  // ----- selection helpers
-  private getSelRange(): [number, number] | null {
-    if (this.selectionAnchor == null || this.selectionFocus == null) return null;
-    const a = this.selectionAnchor;
-    const b = this.selectionFocus;
-    return a <= b ? [a, b] : [b, a];
-  }
-  private clearSelection() {
-    this.selectionAnchor = null;
-    this.selectionFocus = null;
-  }
-  private isSelectedAbs(abs: number): boolean {
-    const r = this.getSelRange();
-    if (!r) return false;
-    return abs >= r[0] && abs < r[1];
-  }
+  private onWindowMouseUp = () => { this.dragging = false; };
 
-  // mouse selection across lines
-  onCellMouseDown(abs: number, e: MouseEvent) {
-    e.preventDefault();
+  onCellMouseDown(abs: number, shift: boolean) {
     this.viz.nativeElement.focus();
-    if (e.shiftKey && this.selectionAnchor != null) {
-      // extend from existing anchor
-      this.selectionFocus = abs + 1;
+    if (shift) {
+      if (this.anchor() == null) this.anchor.set(this.cursorPos());
     } else {
-      this.selectionAnchor = abs;
-      this.selectionFocus = abs + 1;
+      this.anchor.set(abs);
+      this.selStart.set(abs);
+      this.selEnd.set(abs);
     }
-    this.selecting = true;
-    this.cursorPos.set(abs);
+    this.dragging = true;
   }
-  onCellMouseEnter(abs: number, e: MouseEvent) {
-    if (!this.selecting) return;
-    this.selectionFocus = abs + 1; // inclusive of hovered cell
+  onCellMouseEnter(abs: number) {
+    if (!this.dragging) return;
+    this.setSelectionFromAnchor(abs);
   }
-  private onGlobalMouseUp = () => {
-    if (!this.selecting) return;
-    this.selecting = false;
-    const r = this.getSelRange();
-    if (!r || r[0] === r[1]) this.clearSelection();
-  };
+  onCellClick(abs: number) {
+    if (!this.dragging) {
+      this.setCollapsedCaret(abs);
+      this.viz.nativeElement.focus();
+    }
+  }
 
-  // caret keyboard & edit operations
   onVizKeydown(e: KeyboardEvent) {
     const key = e.key;
     const meta = e.metaKey || e.ctrlKey;
+    if (meta && key.toLowerCase() === 'c') { this.copySelected(); e.preventDefault(); return; }
 
-    // copy/cut
-    if (meta && (key.toLowerCase() === 'c' || key.toLowerCase() === 'x')) {
-      const sel = this.getSelRange();
-      if (sel) {
-        const s = this.a.sequence();
-        const frag = s.slice(sel[0], sel[1]);
-        navigator.clipboard?.writeText(frag).catch(() => {});
-        if (key.toLowerCase() === 'x') {
-          const ns = s.slice(0, sel[0]) + s.slice(sel[1]);
-          this.a.sequence.set(ns);
-          this.cursorPos.set(sel[0]);
-          this.clearSelection();
-        }
-        e.preventDefault();
-        return;
-      }
-    }
-
-    // navigation & editing
-    let s = this.a.sequence();
+    const s = this.a.sequence();
     let pos = this.cursorPos();
     const cols = this.lineWidth();
+    const sel = this.selRangeAbs();
 
-    const sel = this.getSelRange();
-
-    const replaceSelection = (txt: string) => {
-      if (!sel) return;
-      const cleaned = txt.toUpperCase().replace(/[^ACGT]/g, '');
-      const ns = s.slice(0, sel[0]) + cleaned + s.slice(sel[1]);
+    const replaceSel = (text: string) => {
+      const cleaned = text.toUpperCase().replace(/[^ACGT]/g, '');
+      const r = this.selRangeAbs();
+      if (!r) return false;
+      const ns = s.slice(0, r.lo) + cleaned + s.slice(r.hi);
       this.a.sequence.set(ns);
-      const newPos = sel[0] + cleaned.length;
+      const newPos = r.lo + cleaned.length;
       this.cursorPos.set(newPos);
       this.clearSelection();
-      s = ns; pos = newPos;
+      return true;
     };
-
-    const insertAtPos = (txt: string) => {
-      const cleaned = txt.toUpperCase().replace(/[^ACGT]/g, '');
+    const insert = (text: string) => {
+      const cleaned = text.toUpperCase().replace(/[^ACGT]/g, '');
       if (!cleaned) return;
+      if (sel) { replaceSel(text); return; }
       const ns = s.slice(0, pos) + cleaned + s.slice(pos);
       this.a.sequence.set(ns);
-      const newPos = pos + cleaned.length;
-      this.cursorPos.set(newPos);
-      s = ns; pos = newPos;
+      this.cursorPos.set(pos + cleaned.length);
     };
-
     const backspace = () => {
-      if (sel) {
-        replaceSelection('');
-        return;
-      }
+      if (sel) { replaceSel(''); return; }
       if (pos <= 0) return;
       const ns = s.slice(0, pos - 1) + s.slice(pos);
       this.a.sequence.set(ns);
       this.cursorPos.set(pos - 1);
     };
     const del = () => {
-      if (sel) {
-        replaceSelection('');
-        return;
-      }
+      if (sel) { replaceSel(''); return; }
       if (pos >= s.length) return;
       const ns = s.slice(0, pos) + s.slice(pos + 1);
       this.a.sequence.set(ns);
     };
 
-    // typing
-    if (/^[acgtACGT]$/.test(key)) {
-      if (sel) replaceSelection(key);
-      else insertAtPos(key);
-      e.preventDefault();
-      return;
-    }
-
+    if (/^[acgtACGT]$/.test(key)) { insert(key); e.preventDefault(); return; }
     if (key === 'Backspace') { backspace(); e.preventDefault(); return; }
     if (key === 'Delete')    { del(); e.preventDefault(); return; }
-
-    const moveCaret = (delta: number, keepSel = false) => {
-      const np = Math.max(0, Math.min(s.length, pos + delta));
-      if (keepSel) {
-        if (this.selectionAnchor == null) this.selectionAnchor = pos;
-        this.selectionFocus = np;
-      } else {
-        this.clearSelection();
-      }
-      this.cursorPos.set(np);
-    };
-
-    // arrow navigation (+ Shift to extend selection)
-    if (key === 'ArrowLeft')  { moveCaret(-1, e.shiftKey); e.preventDefault(); return; }
-    if (key === 'ArrowRight') { moveCaret(+1, e.shiftKey); e.preventDefault(); return; }
-    if (key === 'ArrowUp')    { moveCaret(-cols, e.shiftKey); e.preventDefault(); return; }
-    if (key === 'ArrowDown')  { moveCaret(+cols, e.shiftKey); e.preventDefault(); return; }
-    if (key === 'Home')       { moveCaret(-(pos % cols), e.shiftKey); e.preventDefault(); return; }
-    if (key === 'End')        { moveCaret(cols - (pos % cols), e.shiftKey); e.preventDefault(); return; }
-    if (key === 'Enter')      { e.preventDefault(); return; }
+    if (key === 'ArrowLeft') { this.clearSelection(); if (pos > 0) this.cursorPos.set(pos - 1); e.preventDefault(); return; }
+    if (key === 'ArrowRight'){ this.clearSelection(); if (pos < s.length) this.cursorPos.set(pos + 1); e.preventDefault(); return; }
+    if (key === 'ArrowUp')   { this.clearSelection(); this.cursorPos.set(Math.max(0, pos - cols)); e.preventDefault(); return; }
+    if (key === 'ArrowDown') { this.clearSelection(); this.cursorPos.set(Math.min(s.length, pos + cols)); e.preventDefault(); return; }
+    if (key === 'Home')      { this.clearSelection(); this.cursorPos.set(pos - (pos % cols)); e.preventDefault(); return; }
+    if (key === 'End')       { this.clearSelection(); this.cursorPos.set(Math.min(s.length, pos - (pos % cols) + cols)); e.preventDefault(); return; }
+    if (key === 'Enter')     { e.preventDefault(); return; }
   }
 
-  // paste (replace selection if present)
   onVizPaste(e: ClipboardEvent) {
     const txt = e.clipboardData?.getData('text') ?? '';
-    const cleaned = txt.replace(/[^ACGTacgt]/g, '').toUpperCase();
-    if (!cleaned) { e.preventDefault(); return; }
-
-    const sel = this.getSelRange();
-    const s = this.a.sequence();
-    const pos = this.cursorPos();
-
-    if (sel) {
-      const ns = s.slice(0, sel[0]) + cleaned + s.slice(sel[1]);
-      this.a.sequence.set(ns);
-      this.cursorPos.set(sel[0] + cleaned.length);
-      this.clearSelection();
-    } else {
-      const ns = s.slice(0, pos) + cleaned + s.slice(pos);
-      this.a.sequence.set(ns);
-      this.cursorPos.set(pos + cleaned.length);
+    const cleaned = txt.replace(/[^ACGTacgt]/g, '');
+    if (cleaned) {
+      const s = this.a.sequence();
+      const r = this.selRangeAbs();
+      if (r) {
+        const ns = s.slice(0, r.lo) + cleaned.toUpperCase() + s.slice(r.hi);
+        this.a.sequence.set(ns);
+        this.cursorPos.set(r.lo + cleaned.length);
+        this.clearSelection();
+      } else {
+        const pos = this.cursorPos();
+        const ns = s.slice(0, pos) + cleaned.toUpperCase() + s.slice(pos);
+        this.a.sequence.set(ns);
+        this.cursorPos.set(pos + cleaned.length);
+      }
     }
-
     e.preventDefault();
   }
 
-  // ----- scrolling to center a line
-  private pendingScroll: number | null = null;
-  private rafHandle: number | null = null;
-
-  private scheduleScrollTo(absIndex: number) {
-    this.pendingScroll = absIndex;
-    if (this.rafHandle) cancelAnimationFrame(this.rafHandle);
-    this.rafHandle = requestAnimationFrame(() => this.tryScrollPending());
+  onVizCopy(e: ClipboardEvent) {
+    const r = this.selRangeAbs();
+    if (!r) return;
+    const text = this.a.sequence().slice(r.lo, r.hi);
+    e.clipboardData?.setData('text/plain', text);
+    e.preventDefault();
   }
-
-  private tryScrollPending() {
-    if (this.pendingScroll == null) return;
-    const viz = this.viz?.nativeElement;
-    if (!viz) return;
-
-    const cols = this.lineWidth();
-    const rowIdx = Math.floor(this.pendingScroll / cols);
-
-    const rows = Array.from(viz.querySelectorAll<HTMLElement>('.line'));
-    if (!rows.length || !rows[rowIdx]) {
-      // wait next frame if not yet rendered
-      this.rafHandle = requestAnimationFrame(() => this.tryScrollPending());
-      return;
+  private async copySelected() {
+    const r = this.selRangeAbs();
+    if (!r) return;
+    const text = this.a.sequence().slice(r.lo, r.hi);
+    try { await navigator.clipboard.writeText(text); }
+    catch {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
     }
-    const rowEl = rows[rowIdx];
-    const rowTop = rowEl.offsetTop;
-    const rowHeight = rowEl.offsetHeight;
-
-    const targetTop = rowTop - (viz.clientHeight / 2 - rowHeight / 2);
-    const clamped = Math.max(0, Math.min(viz.scrollHeight - viz.clientHeight, targetTop));
-    viz.scrollTo({ top: clamped, behavior: 'smooth' });
-    viz.focus();
-
-    this.pendingScroll = null;
-    if (this.rafHandle) { cancelAnimationFrame(this.rafHandle); this.rafHandle = null; }
   }
 
-  // ----- layout computation
+  // ---------- layout helpers ----------
   private measureAndSetLineWidth(): void {
     const host = this.viz?.nativeElement;
     if (!host) return;
@@ -367,7 +284,6 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
     if (cols !== this.lineWidth()) this.lineWidth.set(cols);
   }
 
-  // ----- building lines
   private cellClass(ch: string): string {
     if (ch === 'A') return 'nt nt-a';
     if (ch === 'C') return 'nt nt-c';
@@ -375,23 +291,29 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
     if (ch === 'T') return 'nt nt-t';
     return 'nt nt-x';
   }
-
+  private buildTickFlags(start0: number, len: number): boolean[] {
+    const arr = Array<boolean>(len).fill(false);
+    for (let col = 0; col < len; col++) {
+      const abs1 = start0 + col + 1;
+      if (abs1 % 10 === 0) arr[col] = true;
+    }
+    return arr;
+  }
   private buildRulerChars(start0: number, len: number): string[] {
     const arr = Array<string>(len).fill(' ');
     for (let col = 0; col < len; col++) {
       const abs1 = start0 + col + 1;
       if (abs1 % 10 === 0) {
         const s = String(abs1);
-        const begin = col - (s.length - 1);
+        const startCol = col - Math.floor((s.length - 1) / 2);
         for (let k = 0; k < s.length; k++) {
-          const idx = begin + k;
+          const idx = startCol + k;
           if (idx >= 0 && idx < len) arr[idx] = s[k];
         }
       }
     }
     return arr;
   }
-
   private paintBar(start0: number, len: number, ranges: FeatureRegion[] | null): boolean[] {
     const out = new Array<boolean>(len).fill(false);
     if (!ranges || !ranges.length) return out;
@@ -412,29 +334,38 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
   }
 
   private buildLines(
-    seq: string, ranges: FeatureRegion[], selected: FeatureRegion | null, lineW: number
+    seq: string,
+    ranges: FeatureRegion[],
+    selected: FeatureRegion | null,
+    lineW: number,
+    caretAbs: number
   ): Line[] {
     const out: Line[] = [];
     for (let i = 0; i < seq.length; i += lineW) {
       const chunk = seq.slice(i, i + lineW);
-      const cells: Cell[] = Array.from(chunk, (ch, idx) => ({
-        ch, cls: this.cellClass(ch), abs: i + idx
-      }));
+      const cells: Cell[] = Array.from(chunk, (ch, idx) => ({ ch, cls: this.cellClass(ch), abs: i + idx }));
+      const len = cells.length;
+
+      const caretArr = new Array<boolean>(len + 1).fill(false);
+      if (caretAbs >= i && caretAbs <= i + len) {
+        caretArr[caretAbs - i] = true;
+      }
+
       out.push({
         start: i,
         cells,
-        ruler: this.buildRulerChars(i, cells.length),
-        barAll: this.paintBar(i, cells.length, ranges),
-        barSel: this.paintSingle(i, cells.length, selected),
+        tick: this.buildTickFlags(i, len),
+        ruler: this.buildRulerChars(i, len),
+        barAll: this.paintBar(i, len, ranges),
+        barSel: this.paintSingle(i, len, selected),
+        caret: caretArr
       });
     }
+    // Edge case: empty sequence → still no lines (caret handled by placeholder)
     return out;
   }
 
-  // colors for bars (driven by selected kind)
-  barColorAll = computed(() => {
-    const k = this.a.selectedKind();
-    return k ? this.a.featureColor(k) : 'transparent';
-  });
+  // color for bars
+  barColorAll = computed(() => this.a.selectedKind() ? this.a.featureColor(this.a.selectedKind()!) : 'transparent');
   barColorSel = this.barColorAll;
 }

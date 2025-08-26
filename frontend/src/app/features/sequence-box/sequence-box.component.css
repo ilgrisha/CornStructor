@@ -1,63 +1,76 @@
 /* ============================================================================
  * Path: frontend/src/app/features/sequence-box/sequence-box.component.css
- * Version: v2.5.0
+ * Version: v2.7.0
  * ============================================================================
- * Notes:
- * - .mono, .ruler, .bars share same monospace font & size → 1ch columns align.
- * - Visible blinking caret with ::before; “after” caret for end-of-line.
- * - Selection highlight across lines.
+ * NEW: .caret absolute overlay with len+1 1ch columns; blinking bar appears
+ *      exactly at column boundaries. Hidden/dimmed when not focused.
  * ==========================================================================*/
 .card{background:#fff;border:1px solid #e5e5ea;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:12px}
-.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.card-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
 .title{font-weight:600;color:#0f172a}
+.meta{color:#64748b;font-size:12px;display:flex;gap:8px;flex-wrap:wrap}
 
-.controls{display:flex;gap:12px;align-items:center}
+.controls{display:flex;justify-content:space-between;align-items:center;margin:6px 0 8px 0}
 .hide-all{font-size:12px;color:#475569;display:flex;align-items:center;gap:8px}
 .right-controls{display:flex;align-items:center;gap:10px}
 .upload input[type=file]{display:none}
 .upload{background:#f3f4f6;border:1px solid #e5e7eb;padding:4px 8px;border-radius:8px;font-size:12px;color:#374151;cursor:pointer}
 .cols{font-size:12px;color:#64748b}
 
+/* Prevent native selection — custom selection only */
+.viz, .viz *{user-select:none}
 .viz{max-height:52vh;overflow:auto;border:1px solid #e5e7eb;border-radius:12px;padding:8px;background:#fcfcfd;outline:none}
 .viz:focus{box-shadow:0 0 0 3px rgba(59,130,246,.15);border-color:#93c5fd}
 
 .grid{display:grid;gap:0}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.35;letter-spacing:0;font-variant-numeric:tabular-nums}
-.ruler{color:#94a3b8}
-.bars{height:6px;margin:2px 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
-.bars.sel{height:8px}
-.barcell{width:1ch;height:100%;border-radius:2px;opacity:.35}
-.bars.sel .barcell{opacity:1}
 
-.meta{color:#64748b;font-size:12px;display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.meta.under{margin-top:10px}
+/* Per-line container to host absolute caret overlay */
+.line{position:relative}
 
-.nt{display:inline-block;width:1ch;text-align:center;cursor:text;user-select:none}
+/* Bases */
+.nt{display:inline-block;width:1ch;text-align:center;cursor:text}
+.nt.sel{background:rgba(59,130,246,.28); outline:1px solid rgba(59,130,246,.35); border-radius:2px}
 .nt-a{color:#e11d48}
 .nt-c{color:#0ea5e9}
 .nt-g{color:#16a34a}
 .nt-t{color:#f59e0b}
 .nt-x{color:#b91c1c;background:#fee2e2;border-radius:2px}
 
-/* selection highlight across lines */
-.nt.sel{background:#dbeafe;border-radius:2px;box-shadow:inset 0 0 0 1px #93c5fd}
-
-/* caret */
-@keyframes caretBlink{50%{opacity:0}}
-.nt.caret-before{position:relative}
-.nt.caret-before::before{
-  content:"";
-  position:absolute;left:0;top:-1px;bottom:-1px;width:1px;
-  background:#2563eb;
-  animation:caretBlink 1s steps(1) infinite;
+/* Caret overlay — aligned 1ch; sits over the base row */
+.caret{
+  position:absolute; inset:auto 0 auto 0; /* width full, height set below */
+  top:0; height:1.35em; /* same as .mono line-height */
+  pointer-events:none; z-index:3;
 }
-.nt.caret-after{position:relative}
-.nt.caret-after::after{
-  content:"";
-  position:absolute;right:0;top:-1px;bottom:-1px;width:1px;
-  background:#2563eb;
-  animation:caretBlink 1s steps(1) infinite;
+.caretcell{position:relative; width:1ch; height:100%}
+.caretcell.on::after{
+  content:""; position:absolute; left:0; top:10%;
+  width:1px; height:80%;
+  background:#0f172a;
+  animation:caretblink 1s steps(1,end) infinite;
+}
+/* Dim / stop blinking when not focused */
+.viz:not(:focus) .caretcell.on::after{ opacity:.35; animation:none }
+
+/* Ticks */
+.tick{height:6px;margin:1px 0 0 0}
+.tickcell{position:relative;display:inline-block;width:1ch;height:100%}
+.tickcell.on::after{
+  content:"";position:absolute;left:50%;transform:translateX(-50%);
+  top:0;width:1px;height:4px;background:#cbd5e1;border-radius:1px;
 }
 
-/* empty state text */
+/* Ruler */
+.ruler{color:#94a3b8}
+.ruler .r{display:inline-block;width:1ch;text-align:center;transform:scale(0.82);transform-origin:center top;line-height:1.1}
+
+/* Range bars */
+.bars{height:6px;margin:2px 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+.bars.sel{height:8px}
+.barcell{width:1ch;height:100%;border-radius:2px;opacity:.35}
+.bars.sel .barcell{opacity:1}
+
 .placeholder{padding:20px 8px;color:#64748b;font-size:13px}
+
+@keyframes caretblink { 0%{opacity:1} 50%{opacity:0} 100%{opacity:1} }
