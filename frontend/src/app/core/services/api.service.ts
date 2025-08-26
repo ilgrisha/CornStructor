@@ -1,94 +1,53 @@
 /* ============================================================================
  * Path: frontend/src/app/core/services/api.service.ts
- * Version: v2.3.0
+ * Version: v2.2.0
  * ============================================================================
- * Frontend API glue.
- * - Adds a result link signal + resultLink()/setResultLink()
- * - Clears link & logs at startDesign()
- * - Sets result link opportunistically in getResult()
+ * - startDesign() posts to backend and streams logs via SSE
+ * - Signals for logs + result link
  * ==========================================================================*/
-
-import { Injectable, WritableSignal, signal } from '@angular/core';
-import type { AnalysisParams, Toggles } from './analysis.service';
+import { Injectable, signal, WritableSignal, effect } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { AnalysisParams, FeatureKind } from './analysis.service';
 
 export interface DesignStartRequest {
   sequence: string;
   params: AnalysisParams;
-  toggles: Toggles;
-}
-
-export interface DesignStartResponse {
-  jobId: string;
+  toggles?: Record<string, boolean>;
 }
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
-  baseUrl = '/api';
+  constructor(private http: HttpClient) {}
 
-  /** Live log lines from SSE or local messages */
   logLines: WritableSignal<string[]> = signal<string[]>([]);
+  resultLink: WritableSignal<string | null> = signal(null);
+  private sse?: EventSource;
 
-  /** Currently running job (if any) */
-  currentJobId: WritableSignal<string | null> = signal<string | null>(null);
-
-  /** Result page URL (set after job completes) */
-  private _resultUrl: WritableSignal<string | null> = signal<string | null>(null);
-
-  /** Template-friendly getter used in run.component.html */
-  resultLink(): string | null {
-    return this._resultUrl();
-  }
-
-  /** Allows components to override/clear the result link */
-  setResultLink(url: string | null) {
-    this._resultUrl.set(url);
-  }
-
-  addLogLine(line: string) {
-    this.logLines.update(arr => [...arr, line]);
-  }
-
-  async startDesign(req: DesignStartRequest): Promise<DesignStartResponse> {
-    // reset UI state for a fresh run
-    this.setResultLink(null);
+  clear() {
     this.logLines.set([]);
+    this.resultLink.set(null);
+    if (this.sse) { this.sse.close(); this.sse = undefined; }
+  }
 
-    const res = await fetch(`${this.baseUrl}/design/start`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req),
+  startDesign(req: DesignStartRequest) {
+    this.clear();
+    return this.http.post<{ jobId: string }>('/api/design/start', req).subscribe({
+      next: ({ jobId }) => this.attachSSE(jobId),
+      error: () => this.logLines.update(a => [...a, 'Error starting design']),
     });
-    if (!res.ok) {
-      this.addLogLine(`Start failed: ${res.status} ${res.statusText}`);
-      throw new Error(`startDesign failed: ${res.status}`);
-    }
-    const data = (await res.json()) as DesignStartResponse;
-    this.currentJobId.set(data.jobId);
-    this.addLogLine(`Started job ${data.jobId}`);
-    return data;
   }
 
-  streamLogs(jobId: string): EventSource {
-    const es = new EventSource(`${this.baseUrl}/design/${jobId}/logs`);
-    es.onmessage = (ev) => this.addLogLine(ev.data ?? '');
-    es.onerror = () => this.addLogLine('⚠️ log stream disconnected');
-    return es;
-  }
-
-  async getResult(jobId: string): Promise<any> {
-    const res = await fetch(`${this.baseUrl}/design/${jobId}/result`);
-    if (!res.ok) throw new Error(`result fetch failed: ${res.status}`);
-    const data = await res.json();
-
-    // Try a few common fields the backend might provide
-    const candidate =
-      data?.indexUrl ??
-      data?.outputPage ??
-      data?.output?.indexUrl ??
-      data?.links?.index ??
-      null;
-
-    if (candidate) this.setResultLink(candidate);
-    return data;
+  private attachSSE(jobId: string) {
+    this.sse = new EventSource(`/api/design/${jobId}/logs`);
+    this.sse.onmessage = (ev) => {
+      this.logLines.update(a => [...a, ev.data]);
+      // naïve: detect final line with URL
+      const m = /RESULT:\s*(https?:\/\/\S+)/.exec(ev.data);
+      if (m) this.resultLink.set(m[1]);
+    };
+    this.sse.onerror = () => {
+      this.logLines.update(a => [...a, 'Log stream ended']);
+      this.sse?.close();
+    };
   }
 }

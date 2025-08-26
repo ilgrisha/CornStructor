@@ -1,7 +1,82 @@
-/*
+/* ============================================================================
  * Path: frontend/src/app/features/results/results.component.css
- * Version: v0.8.0
- */
-.toprow { display:grid; grid-template-columns: 300px 1fr; gap:16px; }
-.stats { margin-top:10px; font-size:13px; }
-.muted { color:#636366; }
+ * Version: v2.3.1
+ * ============================================================================
+ * CHANGE: Make selected range numbers (start, end, length) in the pinned bar
+ *         use a smaller font for a subtler, more compact look.
+ * ==========================================================================*/
+:host{ display:block; }
+
+.card{
+  background:#fff;
+  border:1px solid #e5e5ea;
+  border-radius:16px;
+  box-shadow:0 1px 3px rgba(0,0,0,.06);
+  padding:12px;
+  overflow:visible;   /* ensure only the table scrolls */
+}
+
+.card-header{ margin-bottom:6px; }
+.title{ font-weight:600; color:#0f172a; }
+
+.kinds{
+  display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px;
+}
+.chip{
+  display:inline-flex; align-items:center; gap:6px;
+  border:1px solid #e5e7eb; background:#f8fafc; color:#334155;
+  border-radius:999px; padding:4px 10px; font-size:12px; cursor:pointer;
+}
+.chip.active{ background:#eef2ff; border-color:#c7d2fe; color:#1e293b; }
+.chip.clear{ background:#fff; }
+.dot{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+.count{ margin-left:4px; color:#475569; }
+
+.ranges-scroll{
+  max-height:34vh;            /* vertical scroll area */
+  overflow-y:auto;
+  overflow-x:hidden;          /* no horizontal scroll */
+  border:1px solid #e5e7eb;
+  border-radius:10px;
+}
+
+/* Pinned selected row */
+.pinned{
+  position: sticky; top: 0; z-index: 2;
+  display:flex; align-items:center; gap:10px;
+  background:#fff; border-bottom:1px solid #e5e7eb;
+  padding:8px 10px;
+}
+.pinned .swatch{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+.pinned .cols{ display:flex; gap:14px; flex:1 1 auto; }
+.pinned .label{ font-size:11px; color:#64748b; margin-right:4px; text-transform:uppercase; }
+
+/* Smaller numbers for start / end / length in pinned bar */
+.pinned .mono{
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-variant-numeric:tabular-nums;
+  font-size:11px;              /* ↓ smaller than table cells */
+  line-height:1.2;
+  color:#0f172a;
+}
+
+/* Compact table */
+table{
+  width:100%;
+  border-collapse:collapse;
+  table-layout:fixed;       /* ensures no horizontal scroll, columns share width */
+  font-size:12px;
+}
+thead th{
+  text-align:left; font-weight:600; color:#475569;
+  padding:6px 10px; border-bottom:1px solid #e5e7eb;
+}
+tbody td{
+  padding:6px 10px; border-bottom:1px solid #f1f5f9; white-space:nowrap;
+}
+tbody tr{ cursor:pointer; }
+tbody tr:hover{ background:#f8fafc; }
+tbody tr.selected{ background:#eef2ff; }
+
+.mono{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-variant-numeric:tabular-nums; }
+.empty{ color:#64748b; font-size:12px; padding:10px; }

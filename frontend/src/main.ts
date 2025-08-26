@@ -1,11 +1,14 @@
+/* ============================================================================
+ * Path: frontend/src/main.ts
+ * Version: v3.0.0
+ * ==========================================================================*/
+import { enableProdMode, importProvidersFrom } from '@angular/core';
 import { bootstrapApplication } from '@angular/platform-browser';
-import { provideHttpClient, withFetch } from '@angular/common/http';
-import { provideAnimations } from '@angular/platform-browser/animations';
-import { AppComponent } from './app/app.component';
+import { provideHttpClient } from '@angular/common/http';
+import { HomeComponent } from './app/features/home/home.component';
 
-bootstrapApplication(AppComponent, {
+bootstrapApplication(HomeComponent, {
   providers: [
-    provideHttpClient(withFetch()),
-    provideAnimations(),
+    provideHttpClient(),
   ]
 }).catch(err => console.error(err));

@@ -1,0 +1,63 @@
+/* ============================================================================
+ * Path: frontend/src/app/features/sequence-box/sequence-box.component.css
+ * Version: v2.5.0
+ * ============================================================================
+ * Notes:
+ * - .mono, .ruler, .bars share same monospace font & size → 1ch columns align.
+ * - Visible blinking caret with ::before; “after” caret for end-of-line.
+ * - Selection highlight across lines.
+ * ==========================================================================*/
+.card{background:#fff;border:1px solid #e5e5ea;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:12px}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.title{font-weight:600;color:#0f172a}
+
+.controls{display:flex;gap:12px;align-items:center}
+.hide-all{font-size:12px;color:#475569;display:flex;align-items:center;gap:8px}
+.right-controls{display:flex;align-items:center;gap:10px}
+.upload input[type=file]{display:none}
+.upload{background:#f3f4f6;border:1px solid #e5e7eb;padding:4px 8px;border-radius:8px;font-size:12px;color:#374151;cursor:pointer}
+.cols{font-size:12px;color:#64748b}
+
+.viz{max-height:52vh;overflow:auto;border:1px solid #e5e7eb;border-radius:12px;padding:8px;background:#fcfcfd;outline:none}
+.viz:focus{box-shadow:0 0 0 3px rgba(59,130,246,.15);border-color:#93c5fd}
+
+.grid{display:grid;gap:0}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.35;letter-spacing:0;font-variant-numeric:tabular-nums}
+.ruler{color:#94a3b8}
+.bars{height:6px;margin:2px 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+.bars.sel{height:8px}
+.barcell{width:1ch;height:100%;border-radius:2px;opacity:.35}
+.bars.sel .barcell{opacity:1}
+
+.meta{color:#64748b;font-size:12px;display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.meta.under{margin-top:10px}
+
+.nt{display:inline-block;width:1ch;text-align:center;cursor:text;user-select:none}
+.nt-a{color:#e11d48}
+.nt-c{color:#0ea5e9}
+.nt-g{color:#16a34a}
+.nt-t{color:#f59e0b}
+.nt-x{color:#b91c1c;background:#fee2e2;border-radius:2px}
+
+/* selection highlight across lines */
+.nt.sel{background:#dbeafe;border-radius:2px;box-shadow:inset 0 0 0 1px #93c5fd}
+
+/* caret */
+@keyframes caretBlink{50%{opacity:0}}
+.nt.caret-before{position:relative}
+.nt.caret-before::before{
+  content:"";
+  position:absolute;left:0;top:-1px;bottom:-1px;width:1px;
+  background:#2563eb;
+  animation:caretBlink 1s steps(1) infinite;
+}
+.nt.caret-after{position:relative}
+.nt.caret-after::after{
+  content:"";
+  position:absolute;right:0;top:-1px;bottom:-1px;width:1px;
+  background:#2563eb;
+  animation:caretBlink 1s steps(1) infinite;
+}
+
+/* empty state text */
+.placeholder{padding:20px 8px;color:#64748b;font-size:13px}

@@ -1,6 +1,8 @@
-html, body{ height:100%; background:#f5f5f7; color:#1d1d1f; }
-*{ box-sizing:border-box; }
-a{ color:#0071e3; }
-
-/* fallback nucleotide classes if used outside components */
-.nt-a{ color:#d73027; } .nt-c{ color:#4575b4; } .nt-g{ color:#1a9850; } .nt-t{ color:#984ea3; } .nt-bad{ color:#b00020; background:#ffe5e9; }
+/* ============================================================================
+ * Path: frontend/src/styles.css
+ * Version: v1.2.0
+ * ==========================================================================*/
+:root{color-scheme: light}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial;}

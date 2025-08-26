@@ -1,48 +1,91 @@
-<app-card title="Parameters" subtitle="Analysis controls">
-  <div class="group">
-    <div class="g-head">Show features</div>
-    <label><input type="checkbox" [checked]="tog().homopolymers" (change)="toggle('homopolymers', $event)"> Homopolymers</label><br>
-    <label><input type="checkbox" [checked]="tog().gc"           (change)="toggle('gc', $event)"> GC% out-of-range</label><br>
-    <label><input type="checkbox" [checked]="tog().entropy"      (change)="toggle('entropy', $event)"> Low complexity</label><br>
-    <label><input type="checkbox" [checked]="tog().repeats"      (change)="toggle('repeats', $event)"> Repeats</label>
+<!-- =========================================================================
+     Path: frontend/src/app/features/params/params.component.html
+     Version: v2.3.1
+     ========================================================================= -->
+<div class="card card--compact">
+  <div class="card-header">
+    <div class="title">Parameters</div>
   </div>
 
-  <div class="group">
-    <div class="g-head">Homopolymers</div>
-    <label>Min length
-      <input type="number" min="2" [value]="p().homoMin" (input)="updateNum('homoMin',$event)">
-    </label>
-  </div>
-
-  <div class="group">
-    <div class="g-head">GC% (sliding window)</div>
-    <label>Window
-      <input type="number" min="5" [value]="p().gcWindow" (input)="updateNum('gcWindow',$event)">
-    </label>
-    <div class="row">
-      <label>Min <input type="number" step="1" [value]="p().gcMin" (input)="updateNum('gcMin',$event)"></label>
-      <label>Max <input type="number" step="1" [value]="p().gcMax" (input)="updateNum('gcMax',$event)"></label>
+  <!-- Homopolymers -->
+  <section class="group">
+    <div class="group-title">Homopolymers</div>
+    <div class="row grid">
+      <label class="control">
+        <span>Min length</span>
+        <input type="number" min="2" step="1"
+               [value]="p().homoMin"
+               (input)="updateNum('homoMin', $event)">
+      </label>
     </div>
-  </div>
+  </section>
 
-  <div class="group">
-    <div class="g-head">Low complexity (Shannon)</div>
-    <label>Window
-      <input type="number" min="5" [value]="p().entropyWindow" (input)="updateNum('entropyWindow',$event)">
-    </label>
-    <label>Entropy min (bits)
-      <input type="number" step="0.1" [value]="p().entropyMin" (input)="updateNum('entropyMin',$event)">
-    </label>
-  </div>
-
-  <div class="group">
-    <div class="g-head">Repeats (tandem)</div>
-    <div class="row">
-      <label>k min <input type="number" min="1" [value]="p().repeatKmin" (input)="updateNum('repeatKmin',$event)"></label>
-      <label>k max <input type="number" min="1" [value]="p().repeatKmax" (input)="updateNum('repeatKmax',$event)"></label>
+  <!-- GC% -->
+  <section class="group">
+    <div class="group-title">GC% (sliding window)</div>
+    <div class="row grid grid-3">
+      <label class="control">
+        <span>Window</span>
+        <input type="number" min="5" step="1"
+               [value]="p().gcWin"
+               (input)="updateNum('gcWin', $event)">
+      </label>
+      <label class="control">
+        <span>Min</span>
+        <input type="number" step="1"
+               [value]="p().gcMin"
+               (input)="updateNum('gcMin', $event)">
+      </label>
+      <label class="control">
+        <span>Max</span>
+        <input type="number" step="1"
+               [value]="p().gcMax"
+               (input)="updateNum('gcMax', $event)">
+      </label>
     </div>
-    <label>Min repeats
-      <input type="number" min="2" [value]="p().repeatMinReps" (input)="updateNum('repeatMinReps',$event)">
-    </label>
-  </div>
-</app-card>
+  </section>
+
+  <!-- Low complexity -->
+  <section class="group">
+    <div class="group-title">Low complexity (Shannon)</div>
+    <div class="row grid grid-2">
+      <label class="control">
+        <span>Window</span>
+        <input type="number" min="5" step="1"
+               [value]="p().entropyWin"
+               (input)="updateNum('entropyWin', $event)">
+      </label>
+      <label class="control">
+        <span>Entropy min (bits)</span>
+        <input type="number" step="0.1"
+               [value]="p().entropyMin"
+               (input)="updateNum('entropyMin', $event)">
+      </label>
+    </div>
+  </section>
+
+  <!-- Repeats -->
+  <section class="group">
+    <div class="group-title">Repeats (tandem)</div>
+    <div class="row grid grid-3">
+      <label class="control">
+        <span>k min</span>
+        <input type="number" min="1" step="1"
+               [value]="p().repeatKmin"
+               (input)="updateNum('repeatKmin', $event)">
+      </label>
+      <label class="control">
+        <span>k max</span>
+        <input type="number" min="1" step="1"
+               [value]="p().repeatKmax"
+               (input)="updateNum('repeatKmax', $event)">
+      </label>
+      <label class="control">
+        <span>Min repeats</span>
+        <input type="number" min="2" step="1"
+               [value]="p().repeatMinReps"
+               (input)="updateNum('repeatMinReps', $event)">
+      </label>
+    </div>
+  </section>
+</div>

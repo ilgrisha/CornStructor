@@ -1,0 +1,83 @@
+<!-- =========================================================================
+     Path: frontend/src/app/features/sequence-box/sequence-box.component.html
+     Version: v2.5.0
+     ========================================================================= -->
+<div class="card">
+  <div class="card-header">
+    <div class="title">Sequence</div>
+    <div class="controls">
+      <label class="hide-all">
+        <input type="checkbox"
+               [checked]="hideAllWhenSelected()"
+               (change)="onHideAllToggle($event)">
+        Hide “All ranges” bar when a single range is selected
+      </label>
+
+      <div class="right-controls">
+        <label class="upload">
+          <input type="file" accept=".fa,.fasta,.txt" (change)="onFastaFile($event)">
+          Upload FASTA
+        </label>
+        <span class="cols">Per-line: {{ lineWidth() }} nt</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interactive editor/viewer -->
+  <div #viz class="viz" tabindex="0"
+       (click)="focusViz()"
+       (keydown)="onVizKeydown($event)"
+       (paste)="onVizPaste($event)">
+    <ng-container *ngIf="a.sequence(); else empty">
+      <div class="line" *ngFor="let ln of lines()">
+        <!-- Sequence characters -->
+        <div class="grid mono"
+             [style.gridTemplateColumns]="'repeat(' + ln.cells.length + ', 1ch)'">
+          <span *ngFor="let c of ln.cells; let i = index"
+                [class]="c.cls"
+                [class.sel]="isSelectedAbs(c.abs)"
+                [class.caret-before]="c.abs === cursorPos()"
+                [class.caret-after]="i === ln.cells.length - 1 && cursorPos() === (c.abs + 1)"
+                (mousedown)="onCellMouseDown(c.abs, $event)"
+                (mouseenter)="onCellMouseEnter(c.abs, $event)">
+            {{ c.ch }}
+          </span>
+        </div>
+
+        <!-- Ruler -->
+        <div class="grid mono ruler"
+             [style.gridTemplateColumns]="'repeat(' + ln.ruler.length + ', 1ch)'">
+          <span *ngFor="let r of ln.ruler">{{ r }}</span>
+        </div>
+
+        <!-- All-ranges bar -->
+        <div class="grid bars"
+             *ngIf="!(hideAllWhenSelected() && selRange())"
+             [style.gridTemplateColumns]="'repeat(' + ln.barAll.length + ', 1ch)'">
+          <span *ngFor="let on of ln.barAll" class="barcell"
+                [style.background]="on ? barColorAll() : 'transparent'"></span>
+        </div>
+
+        <!-- Selected-range bar -->
+        <div class="grid bars sel"
+             [style.gridTemplateColumns]="'repeat(' + ln.barSel.length + ', 1ch)'">
+          <span *ngFor="let on of ln.barSel" class="barcell"
+                [style.background]="on ? barColorSel() : 'transparent'"></span>
+        </div>
+      </div>
+    </ng-container>
+
+    <ng-template #empty>
+      <div class="placeholder">Click here and type/paste DNA (A C G T)… or upload FASTA above.</div>
+    </ng-template>
+  </div>
+
+  <!-- Meta under the sequence box -->
+  <div class="meta under">
+    <span>Length: {{ a.length() }} bp</span>
+    <span *ngIf="hasInvalid()"> • non-DNA chars: {{ invalidCount() }}</span>
+    <span *ngIf="a.selectedKind()"> • selected: {{ a.selectedKind() }} ({{ selRanges().length }} merged)</span>
+    <span> • cursor: {{ cursorPos() + 1 }}</span>
+    <span *ngIf="lastFastaName()"> • FASTA: {{ lastFastaName() }}<ng-container *ngIf="lastFastaId()">( {{ lastFastaId() }} )</ng-container></span>
+  </div>
+</div>
