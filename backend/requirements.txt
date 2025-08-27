@@ -1,5 +1,5 @@
 # File: backend/requirements.txt
-# Version: v0.3.0
+# Version: v0.4.0
 # Core scientific/GA stack
 biopython>=1.83
 # C-accelerated edit distance (preferred)
@@ -14,3 +14,4 @@ pytest>=8.2.0
 fastapi>=0.112
 uvicorn[standard]>=0.30
 pydantic-settings>=2.3
+SQLAlchemy>=2.0

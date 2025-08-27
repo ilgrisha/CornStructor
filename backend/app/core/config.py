@@ -1,5 +1,5 @@
 # File: backend/app/core/config.py
-# Version: v0.2.0
+# Version: v0.3.0
 """
 Centralized application settings using Pydantic Settings.
 
@@ -9,32 +9,34 @@ Controls:
 - Paths to levels/globals JSON
 - Output dir for generated reports (shared volume)
 - Public base path for reports (served by Nginx in prod; by FastAPI StaticFiles in dev)
+- Database URL (SQLAlchemy)
 """
 from __future__ import annotations
 
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 class Settings(BaseSettings):
-    APP_NAME: str = "CornStructor API"
-    APP_VERSION: str = "0.2.0"
+    # --- App ---
     API_PREFIX: str = "/api"
+    APP_NAME: str = "CornStructor"
+    APP_VERSION: str = "0.3.0"
 
-    # CORS (comma-separated origins or "*")
-    CORS_ORIGINS: str = "*"
+    # --- CORS ---
+    CORS_ORIGINS: str = "*"  # comma-separated or '*' for all
 
-    # Input config files (existing in repo)
+    # --- Data / pipeline config ---
     LEVELS_PATH: Path = Path("backend/app/config/levels.json")
     GLOBALS_PATH: Path = Path("backend/app/config/globals.json")
 
-    # Output dir (shared volume)
-    OUTPUT_DIR: Path = Path("/data/out")
+    # --- Output / reports ---
+    OUTPUT_DIR: Path = Path("backend/data/out")
+    REPORTS_PUBLIC_BASE: str = "/reports"  # served by backend in dev, Nginx in prod
 
-    # Public URL base for reports
-    REPORTS_PUBLIC_BASE: str = "/reports"
+    # --- DB ---
+    DB_URL: str = "sqlite:///backend/app/data/cornstructor.db"
 
-    # Uvicorn bind
+    # --- Server ---
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     LOG_LEVEL: str = "info"
@@ -47,6 +49,5 @@ class Settings(BaseSettings):
         if raw == "*":
             return ["*"]
         return [o.strip() for o in raw.split(",") if o.strip()]
-
 
 settings = Settings()

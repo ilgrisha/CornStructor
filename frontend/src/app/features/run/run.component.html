@@ -1,27 +1,24 @@
-<!-- =========================================================================
-     Path: frontend/src/app/features/run/run.component.html
-     Version: v2.2.0
-     ========================================================================= -->
+<!-- File: frontend/src/app/features/run/run.component.html
+     Version: v2.4.0 -->
 <div class="card">
   <div class="card-header">
     <div class="title">Construction tree design</div>
-    <button class="btn" (click)="run()">Start design</button>
+    <div class="actions">
+      <button class="btn" (click)="openHistory()">History</button>
+      <button class="btn primary" (click)="run()">Start design</button>
+    </div>
   </div>
 
-  <div class="logs">
+  <!-- Logs: now auto-scrolls; container is #logPane -->
+  <div class="logs" #logPane>
     <div *ngFor="let line of api.logLines()">{{ line }}</div>
   </div>
 
+  <!-- Keep a single, clean link to the run's results page (no artifacts list). -->
   <div *ngIf="api.resultIndexLink()" class="out">
     <a class="link" [href]="api.resultIndexLink()!" target="_blank" rel="noopener">Open results page</a>
   </div>
-
-  <div *ngIf="api.resultLinks().length > 0" class="out-list">
-    <div class="subtitle">Detected artifacts</div>
-    <ul>
-      <li *ngFor="let u of api.resultLinks()">
-        <a class="link" [href]="u" target="_blank" rel="noopener">{{ u }}</a>
-      </li>
-    </ul>
-  </div>
 </div>
+
+<!-- History modal -->
+<app-runs-history [open]="historyOpen()" (close)="closeHistory()" />

@@ -1,0 +1,46 @@
+<!-- File: frontend/src/app/features/runs-history/runs-history.component.html
+     Version: v0.2.0 -->
+<div class="overlay" *ngIf="open">
+  <div class="modal">
+    <div class="header">
+      <div class="title">Previous runs</div>
+      <button class="icon" (click)="close.emit()" aria-label="Close">✕</button>
+    </div>
+
+    <div class="toolbar">
+      <input
+        type="text"
+        placeholder="Search by job id or note…"
+        [(ngModel)]="search"
+        (keyup.enter)="refresh()"
+      />
+      <button class="btn" (click)="refresh()">Search</button>
+    </div>
+
+    <div class="table" *ngIf="items().length > 0; else empty">
+      <div class="thead">
+        <div>When</div>
+        <div>Job ID</div>
+        <div>Status</div>
+        <div>Len</div>
+        <div>Report</div>
+      </div>
+
+      <div class="row" *ngFor="let r of items()">
+        <div>{{ r.created_at | date:'medium' }}</div>
+        <div class="mono">{{ r.job_id }}</div>
+        <div [class.ok]="r.status==='completed'" [class.err]="r.status==='failed'">{{ r.status }}</div>
+        <div class="mono">{{ r.sequence_len ?? '—' }}</div>
+        <div>
+          <button class="link" [disabled]="!r.report_url" (click)="openReport(r)">
+            {{ r.report_url ? 'Open report' : 'Pending…' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <ng-template #empty>
+      <div class="empty">No runs yet.</div>
+    </ng-template>
+  </div>
+</div>
