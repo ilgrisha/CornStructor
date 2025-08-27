@@ -1,6 +1,6 @@
 <!-- =========================================================================
      Path: frontend/src/app/features/run/run.component.html
-     Version: v2.1.0
+     Version: v2.2.0
      ========================================================================= -->
 <div class="card">
   <div class="card-header">
@@ -12,7 +12,16 @@
     <div *ngFor="let line of api.logLines()">{{ line }}</div>
   </div>
 
-  <div *ngIf="api.resultLink()" class="out">
-    <a class="link" [href]="api.resultLink()" target="_blank" rel="noopener">Open output page</a>
+  <div *ngIf="api.resultIndexLink()" class="out">
+    <a class="link" [href]="api.resultIndexLink()!" target="_blank" rel="noopener">Open results page</a>
+  </div>
+
+  <div *ngIf="api.resultLinks().length > 0" class="out-list">
+    <div class="subtitle">Detected artifacts</div>
+    <ul>
+      <li *ngFor="let u of api.resultLinks()">
+        <a class="link" [href]="u" target="_blank" rel="noopener">{{ u }}</a>
+      </li>
+    </ul>
   </div>
 </div>

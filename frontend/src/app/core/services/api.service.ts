@@ -1,13 +1,14 @@
 /* ============================================================================
  * Path: frontend/src/app/core/services/api.service.ts
- * Version: v2.2.0
+ * Version: v2.3.0
  * ============================================================================
  * - startDesign() posts to backend and streams logs via SSE
- * - Signals for logs + result link
+ * - Signals for logs + result links (supports absolute or relative URLs)
+ * - Looks for a final RESULT pointing to /reports/{jobId}/index.html
  * ==========================================================================*/
-import { Injectable, signal, WritableSignal, effect } from '@angular/core';
+import { Injectable, signal, WritableSignal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { AnalysisParams, FeatureKind } from './analysis.service';
+import { AnalysisParams } from './analysis.service';
 
 export interface DesignStartRequest {
   sequence: string;
@@ -17,37 +18,53 @@ export interface DesignStartRequest {
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
-  constructor(private http: HttpClient) {}
-
-  logLines: WritableSignal<string[]> = signal<string[]>([]);
-  resultLink: WritableSignal<string | null> = signal(null);
   private sse?: EventSource;
 
-  clear() {
-    this.logLines.set([]);
-    this.resultLink.set(null);
-    if (this.sse) { this.sse.close(); this.sse = undefined; }
-  }
+  // UI signals
+  readonly logLines: WritableSignal<string[]> = signal<string[]>([]);
+  readonly resultLinks: WritableSignal<string[]> = signal<string[]>([]);
+  readonly resultIndexLink: WritableSignal<string | null> = signal<string | null>(null);
+
+  constructor(private http: HttpClient) {}
 
   startDesign(req: DesignStartRequest) {
-    this.clear();
-    return this.http.post<{ jobId: string }>('/api/design/start', req).subscribe({
-      next: ({ jobId }) => this.attachSSE(jobId),
-      error: () => this.logLines.update(a => [...a, 'Error starting design']),
-    });
+    this.dispose();
+    this.logLines.set([]);
+    this.resultLinks.set([]);
+    this.resultIndexLink.set(null);
+    this.http.post<{ jobId: string }>('/api/design/start', req)
+      .subscribe({
+        next: (res) => this.attachSSE(res.jobId),
+        error: (err) => this.logLines.update(a => [...a, `ERROR: ${err?.message ?? err}`])
+      });
+  }
+
+  private dispose() {
+    if (this.sse) {
+      this.sse.close();
+      this.sse = undefined;
+    }
   }
 
   private attachSSE(jobId: string) {
     this.sse = new EventSource(`/api/design/${jobId}/logs`);
     this.sse.onmessage = (ev) => {
-      this.logLines.update(a => [...a, ev.data]);
-      // naïve: detect final line with URL
-      const m = /RESULT:\s*(https?:\/\/\S+)/.exec(ev.data);
-      if (m) this.resultLink.set(m[1]);
+      const line = ev.data as string;
+      this.logLines.update(a => [...a, line]);
+
+      // Capture RESULT links. Accept absolute (http/https) or relative (/reports/...)
+      const m = /^RESULT:\s*(\S+)/.exec(line);
+      if (m) {
+        const url = m[1];
+        this.resultLinks.update(arr => [...arr, url]);
+        if (url.endsWith('/index.html')) {
+          this.resultIndexLink.set(url);
+        }
+      }
     };
     this.sse.onerror = () => {
       this.logLines.update(a => [...a, 'Log stream ended']);
-      this.sse?.close();
+      this.dispose();
     };
   }
 }

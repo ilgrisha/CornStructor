@@ -1,7 +1,7 @@
 {
   "ga": {
-    "population_size": 60,
-    "num_generations": 60,
+    "population_size": 10,
+    "num_generations": 10,
     "mutation_rate_initial": 0.35,
     "crossover_rate": 0.6,
     "elitism_count": 1,
