@@ -1,0 +1,28 @@
+# File: docker-compose.yml
+# Version: v0.3.0
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - OUTPUT_DIR=/data/out
+    volumes:
+      - reports:/data/out
+    expose:
+      - "8000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    volumes:
+      - reports:/usr/share/nginx/html/reports
+    ports:
+      - "${NGINX_PORT:-8080}:8080"
+    depends_on:
+      - backend
+
+volumes:
+  reports:

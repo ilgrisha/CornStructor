@@ -1,5 +1,5 @@
 # File: backend/requirements.txt
-# Version: v0.2.0
+# Version: v0.3.0
 # Core scientific/GA stack
 biopython>=1.83
 # C-accelerated edit distance (preferred)
@@ -9,3 +9,8 @@ rapidfuzz>=3.9.0
 # C-backed primer design thermodynamics
 primer3-py>=2.0.3
 pytest>=8.2.0
+
+# --- API & runtime ---
+fastapi>=0.112
+uvicorn[standard]>=0.30
+pydantic-settings>=2.3
