@@ -1,9 +1,3 @@
-// ==AI-HEADER-START==
-// Path: frontend/src/app/core/services/analysis.service.ts
-// Version: 1
-// Patch: 20250903-065943-a90b43
-// Stamp: 2025-09-03T06:59:43Z
-// ==AI-HEADER-END==
 /* ============================================================================
 
 Path: frontend/src/app/core/services/analysis.service.ts
