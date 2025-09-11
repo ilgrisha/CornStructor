@@ -1,6 +1,6 @@
 <!-- =========================================================================
 Path: frontend/src/app/features/params/params.component.html
-Version: v2.4.0
+Version: v2.6.0
 ========================================================================= -->
 
 <div class="card card--compact">
@@ -150,6 +150,33 @@ Version: v2.4.0
           step="1"
           [value]="p().longRepMinPct"
           (input)="updateNum('longRepMinPct', $event)"
+        />
+      </label>
+    </div>
+  </section>
+
+  <!-- NEW: Secondary structure (stems) -->
+  <section class="group">
+    <div class="group-title">Secondary structure (stems)</div>
+    <div class="row grid grid-2">
+      <label class="control" title="Minimal merged linear region to keep">
+        <span>Min stem length (bp)</span>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          [value]="p().stemMinLen"
+          (input)="updateNum('stemMinLen', $event); a.refreshStems()"
+        />
+      </label>
+      <label class="control" title="Merge adjacent stems when the unpaired gap ≤ this value">
+        <span>Merge gap ≤ (bp)</span>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          [value]="p().stemMergeMaxGap"
+          (input)="updateNum('stemMergeMaxGap', $event); a.refreshStems()"
         />
       </label>
     </div>

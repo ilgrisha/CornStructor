@@ -1,21 +1,30 @@
 /* ============================================================================
  * Path: frontend/src/app/features/home/home.component.ts
- * Version: v2.0.1
+ * Version: v2.3.0
  * ============================================================================
- * FIX: Use selector 'app-root' so it matches the default element in index.html.
+ * Layout update:
+ * - Left (narrow column): Parameters + Detected features (Feature Picker)
+ * - Right (wide column): Sequence (top) + Construction tree design (Run) below
  * ==========================================================================*/
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { SequenceBoxComponent } from '../sequence-box/sequence-box.component';
+
 import { ParamsComponent } from '../params/params.component';
-import { ResultsComponent } from '../results/results.component';
+import { FeaturePickerComponent } from '../feature-picker/feature-picker.component';
+import { SequenceBoxComponent } from '../sequence-box/sequence-box.component';
 import { RunComponent } from '../run/run.component';
 
 @Component({
-  selector: 'app-root', // <-- match <app-root> in index.html
+  selector: 'app-home',
   standalone: true,
-  imports: [CommonModule, SequenceBoxComponent, ParamsComponent, ResultsComponent, RunComponent],
+  imports: [
+    CommonModule,
+    ParamsComponent,
+    FeaturePickerComponent,
+    SequenceBoxComponent,
+    RunComponent,
+  ],
   templateUrl: './home.component.html',
-  styleUrls: ['./home.component.css']
+  styleUrls: ['./home.component.css'],
 })
 export class HomeComponent {}

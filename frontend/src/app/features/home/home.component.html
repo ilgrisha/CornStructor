@@ -1,18 +1,23 @@
 <!-- =========================================================================
      Path: frontend/src/app/features/home/home.component.html
-     Version: v2.1.0
+     Version: v2.3.0
      ========================================================================= -->
-<div class="layout">
-  <!-- Left column: Parameters + Detected features -->
-  <aside class="left">
-    <app-params></app-params>
-    <!-- Results panel now lives under Parameters -->
-    <app-results class="results-left"></app-results>
-  </aside>
+<div class="shell">
+  <header class="topbar">
+    <h1>CornStructor</h1>
+  </header>
 
-  <!-- Right column: interactive sequence and design run -->
-  <main class="right">
-    <app-sequence-box></app-sequence-box>
-    <app-run></app-run>
+  <main class="content">
+    <!-- Left: narrow column with Parameters + Detected features -->
+    <section class="left">
+      <app-params></app-params>
+      <app-feature-picker></app-feature-picker>
+    </section>
+
+    <!-- Right: wide column with Sequence (top) + Construction tree design (below) -->
+    <section class="right">
+      <app-sequence-box></app-sequence-box>
+      <app-run></app-run>
+    </section>
   </main>
 </div>

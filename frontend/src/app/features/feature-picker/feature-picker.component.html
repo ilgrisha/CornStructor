@@ -1,37 +1,60 @@
-<!--
-  Path: frontend/src/app/features/feature-picker/feature-picker.component.html
-  Version: v1.0.0
--->
-<div class="picker">
-  <div class="group">
-    <div class="title">Features</div>
-    <div class="kinds">
-      <button *ngFor="let k of kinds"
-              class="kind"
-              [ngClass]="{active: isKindActive(k)}"
-              (click)="pickKind(k)">
-        <span class="dot" [style.background]="color(k)"></span>
-        <span class="name">{{ k }}</span>
-        <span class="count">{{ counts()[k] }}</span>
-      </button>
-    </div>
+<!-- =========================================================================
+     Path: frontend/src/app/features/feature-picker/feature-picker.component.html
+     Version: v2.0.0
+     ========================================================================= -->
+<div class="card">
+  <div class="card-header">
+    <div class="title">Detected features</div>
   </div>
 
-  <div class="group" *ngIf="rows().length">
-    <div class="title">Detected regions</div>
-    <div class="rows">
-      <button *ngFor="let r of rows(); index as i"
-              class="row"
-              [ngClass]="{active: isRowActive(i)}"
-              (click)="pickRow(i)">
-        <span>#{{ i + 1 }}</span>
-        <span>{{ r.start + 1 }}–{{ r.end }}</span>
-        <span class="len">{{ r.len }} bp</span>
-      </button>
-    </div>
+  <!-- Kind selector -->
+  <div class="kinds">
+    <button
+      class="chip"
+      *ngFor="let k of kinds()"
+      [class.active]="a.selectedKind() === k"
+      (click)="selectKind(k)">
+      <span class="dot" [style.background]="a.featureColor(k)"></span>
+      {{ k }} <span class="count">{{ counts()[k] }}</span>
+    </button>
+    <button class="chip clear" *ngIf="a.selectedKind()" (click)="clearKind()">Clear</button>
   </div>
 
-  <div class="empty" *ngIf="a.selectedFeature() && !rows().length">
-    No regions detected for {{ a.selectedFeature() }}.
+  <!-- Scrollable ranges area (vertical only). No horizontal scroll. -->
+  <div class="ranges-scroll">
+    <!-- Pinned selected row (sticky at top) -->
+    <div class="pinned" *ngIf="selected()">
+      <span class="swatch" [style.background]="kindColor()"></span>
+      <div class="cols">
+        <div><span class="label">start</span><span class="mono">{{ selected()!.start + 1 }}</span></div>
+        <div><span class="label">end</span><span class="mono">{{ selected()!.end }}</span></div>
+        <div><span class="label">length</span><span class="mono">{{ len(selected()!) }}</span></div>
+      </div>
+      <button class="link" (click)="clearRange()">Clear</button>
+    </div>
+
+    <!-- Compact 3-column table -->
+    <table *ngIf="ranges().length; else noSel">
+      <thead>
+        <tr>
+          <th>start</th>
+          <th>end</th>
+          <th>length</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let r of ranges(); let i = index; trackBy: i"
+            [class.selected]="i === selectedIdx()"
+            (click)="pick(i)">
+          <td class="mono">{{ r.start + 1 }}</td>
+          <td class="mono">{{ r.end }}</td>
+          <td class="mono">{{ len(r) }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <ng-template #noSel>
+      <div class="empty">Choose a feature above to see its merged ranges.</div>
+    </ng-template>
   </div>
 </div>

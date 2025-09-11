@@ -1,9 +1,13 @@
 /* ============================================================================
  * Path: frontend/src/app/features/sequence-box/sequence-box.component.css
- * Version: v2.7.0
+ * Version: v2.8.0
  * ============================================================================
  * NEW: .caret absolute overlay with len+1 1ch columns; blinking bar appears
  *      exactly at column boundaries. Hidden/dimmed when not focused.
+ *
+ * NOTE (v2.8.0): Fully compatible with the new 'stems' overlay. Bars are colored
+ * via inline styles from AnalysisService.featureColor(kind), so no extra CSS
+ * classes are required for stems.
  * ==========================================================================*/
 .card{background:#fff;border:1px solid #e5e5ea;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:12px}
 .card-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}

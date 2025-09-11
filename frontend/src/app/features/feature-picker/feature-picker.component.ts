@@ -1,52 +1,82 @@
-/**
- * Path: frontend/src/app/features/feature-picker/feature-picker.component.ts
- * Version: v1.0.0
- *
- * Feature/region chooser:
- *  - Click a feature type → loads its detected regions
- *  - Click a region → highlights it in the sequence view
- */
+// File: frontend/src/app/features/feature-picker/feature-picker.component.ts
+// Version: v2.0.0
+//
+// Replaces legacy Results UI:
+// - Chip selector with counts
+// - Pinned selected row (sticky)
+// - Compact 3-column table (start, end, length) with vertical scroll only
+// - Includes dynamic kinds with preferred order, including 'stems'
 import { Component, computed } from '@angular/core';
-import { NgFor, NgIf, NgClass } from '@angular/common';
-import { AnalysisService, FeatureKind } from '../../core/services/analysis.service';
-
-type Row = { start: number; end: number; len: number };
+import { CommonModule } from '@angular/common';
+import { AnalysisService, FeatureKind, FeatureRegion } from '../../core/services/analysis.service';
 
 @Component({
   selector: 'app-feature-picker',
   standalone: true,
-  imports: [NgFor, NgIf, NgClass],
+  imports: [CommonModule],
   templateUrl: './feature-picker.component.html',
   styleUrls: ['./feature-picker.component.css'],
 })
 export class FeaturePickerComponent {
   constructor(public a: AnalysisService) {}
 
-  kinds: FeatureKind[] = ['invalid','homopolymers','gcLow','gcHigh','entropyLow','repeats'];
+  /** Preferred order; any extra kinds (future) are appended at the end */
+  private readonly ORDER: FeatureKind[] = [
+    'homopolymers',
+    'gc-low',
+    'gc-high',
+    'entropy-low',
+    'repeats',
+    'long-repeats',
+    'stems',
+  ];
 
-  counts = computed(() => {
-    const f = this.a.features();
-    return {
-      invalid: f.invalid.length,
-      homopolymers: f.homopolymers.length,
-      gcLow: f.gcLow.length,
-      gcHigh: f.gcHigh.length,
-      entropyLow: f.entropyLow.length,
-      repeats: f.repeats.length,
-    } as Record<FeatureKind, number>;
+  /** Kinds to render (dynamic from service map, ordered by ORDER then any extras) */
+  kinds = computed<FeatureKind[]>(() => {
+    const map = this.a.resultByKind();
+    const keys = Object.keys(map) as FeatureKind[];
+    const seen = new Set(keys);
+    const ordered = this.ORDER.filter(k => seen.has(k));
+    for (const k of keys) if (!this.ORDER.includes(k)) ordered.push(k);
+    return ordered;
   });
 
-  rows = computed<Row[]>(() => {
-    const k = this.a.selectedFeature();
-    if (!k) return [];
-    return this.a.getFeatureArray(k).map(r => ({ start: r.start, end: r.end, len: r.end - r.start }));
+  /** Per-kind counts */
+  counts = computed<Record<FeatureKind, number>>(() => {
+    const by = this.a.resultByKind();
+    const out = {} as Record<FeatureKind, number>;
+    for (const k of this.kinds()) out[k] = by[k]?.length ?? 0;
+    return out;
   });
 
-  pickKind(k: FeatureKind) { this.a.selectFeature(k); }
-  pickRow(i: number) { this.a.selectRegion(i); }
+  /** Ranges for the selected kind */
+  ranges = computed<FeatureRegion[]>(() => this.a.selectedRegions());
 
-  isKindActive(k: FeatureKind) { return this.a.selectedFeature() === k; }
-  isRowActive(i: number) { return this.a.selectedIndex() === i; }
+  /** Selected index in the current list */
+  selectedIdx = computed<number>(() => {
+    const sel = this.a.selectedRange();
+    if (!sel) return -1;
+    const list = this.a.selectedRegions();
+    return list.findIndex(r => r.start === sel.start && r.end === sel.end && r.kind === sel.kind);
+  });
 
-  color(k: FeatureKind) { return this.a.featureColors[k]; }
+  /** Convenience */
+  selected = computed<FeatureRegion | null>(() => this.a.selectedRange());
+  kindColor = computed<string>(() => {
+    const k = this.a.selectedKind();
+    return k ? this.a.featureColor(k) : '#94a3b8';
+  });
+
+  /** Actions */
+  selectKind(k: FeatureKind) {
+    this.a.selectKind(k);
+    this.a.selectRangeByIndex(null);
+    if (k === 'stems') { void this.a.refreshStems(); } // ensure up-to-date from server
+  }
+  clearKind() { this.a.selectKind(null); }
+  pick(i: number) { this.a.selectRangeByIndex(i); }
+  clearRange() { this.a.selectRange(null); }
+
+  /** Display helper: compute 0-based length */
+  len(r: FeatureRegion) { return r.end - r.start; }
 }

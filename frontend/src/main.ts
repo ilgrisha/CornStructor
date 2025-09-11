@@ -1,14 +1,15 @@
 /* ============================================================================
  * Path: frontend/src/main.ts
- * Version: v3.0.0
+ * Version: v3.1.0
+ * ============================================================================
+ * Bootstraps AppComponent so the root selector remains <app-root> in index.html.
+ * AppComponent renders <app-home>, whose selector is 'app-home'.
  * ==========================================================================*/
-import { enableProdMode, importProvidersFrom } from '@angular/core';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { provideHttpClient } from '@angular/common/http';
-import { HomeComponent } from './app/features/home/home.component';
 
-bootstrapApplication(HomeComponent, {
-  providers: [
-    provideHttpClient(),
-  ]
+import { AppComponent } from './app/app.component';
+
+bootstrapApplication(AppComponent, {
+  providers: [provideHttpClient()],
 }).catch(err => console.error(err));

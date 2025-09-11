@@ -1,11 +1,16 @@
+// File: frontend/src/app/features/sequence-box/sequence-box.component.ts
+// Version: v0.2.9
+
 /* ============================================================================
- * Path: frontend/src/app/features/sequence-box/sequence-box.component.ts
- * Version: v2.7.0
- * ============================================================================
- * ADD: Visible 1ch-aligned caret (blinking) rendered as an overlay grid with
- *      len+1 columns so it can sit between bases and after the last base.
- * KEEP: Custom multi-line selection/copy/paste, responsive per-line width,
- *       ticks+ruler+bars perfect alignment.
+ * Visible 1ch-aligned caret (blinking) rendered as an overlay grid with
+ * len+1 columns so it can sit between bases and after the last base.
+ * Custom multi-line selection/copy/paste, responsive per-line width,
+ * ticks+ruler+bars perfect alignment.
+ *
+ * UPDATE (v0.2.9):
+ * - After FASTA upload and sequence set, trigger stems recompute immediately:
+ *     void this.a.refreshStems();
+ *   (Your AnalysisService also auto-refreshes on edits via its debounced effect.)
  * ==========================================================================*/
 import {
   Component, computed, effect, signal, WritableSignal,
@@ -120,6 +125,9 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
       this._lastFastaId.set(id);
       this.cursorPos.set(cleaned.length);
       this.clearSelection();
+
+      // NEW: trigger stems immediately after upload (debounced auto-refresh will also run)
+      void this.a.refreshStems();
     };
     reader.readAsText(file);
     (ev.target as HTMLInputElement).value = '';
@@ -235,6 +243,7 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
         this.a.sequence.set(ns);
         this.cursorPos.set(pos + cleaned.length);
       }
+      // No need to call refreshStems() here; AnalysisService debounced effect will run.
     }
     e.preventDefault();
   }
