@@ -1,0 +1,26 @@
+/* File: frontend/src/app/features/run/run.component.css
+   Version: v2.3.0 */
+.card{background:#fff;border:1px solid #e5e5ea;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:12px}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px; gap: 10px;}
+.title{font-weight:600;color:#0f172a}
+.actions{display:flex; gap:8px;}
+.btn{border:1px solid #e5e7eb;background:#334155;color:#fff;border-radius:10px;padding:6px 12px;font-size:12px; cursor:pointer;}
+.btn.primary{background:#111827;}
+.btn:hover{opacity:.95}
+
+/* Smaller log box + keeps scrollbars when long */
+.logs{
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12px;
+  background:#f3f4f6;
+  border:1px solid #e5e7eb;
+  border-radius:8px;
+  padding:8px;
+  max-height:18vh;   /* ↓ was 26vh; made vertically smaller */
+  overflow:auto;
+}
+
+.out{margin-top:8px}
+.link{color:#2563eb}
+
+/* Removed .out-list (Detected artifacts) styles, since that block is gone */

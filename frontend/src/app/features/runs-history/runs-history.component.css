@@ -1,0 +1,21 @@
+/* ============================================================================
+ * Path: frontend/src/app/features/runs-history/runs-history.component.css
+ * Version: v0.1.0
+ * ========================================================================== */
+.overlay{ position: fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:1000; }
+.modal{ background:#fff; color:#0f172a; width: min(960px, 96vw); max-height: 86vh; border-radius: 16px; box-shadow: 0 10px 35px rgba(0,0,0,.25); display:flex; flex-direction:column; }
+.header{ display:flex; align-items:center; justify-content:space-between; padding: 14px 16px; border-bottom:1px solid #e2e8f0; }
+.title{ font-weight:600; }
+.icon{ border:0; background:transparent; font-size:18px; cursor:pointer; opacity:.7; }
+.toolbar{ display:flex; gap:8px; padding: 10px 12px; border-bottom:1px solid #e2e8f0; }
+.toolbar input{ flex:1; border:1px solid #cbd5e1; border-radius: 10px; padding: 8px 10px; }
+.btn{ background:#0ea5e9; color:#fff; border:0; border-radius:10px; padding:8px 12px; cursor:pointer; }
+.table{ overflow:auto; padding: 8px 12px; }
+.thead, .row{ display:grid; grid-template-columns: 2fr 2fr 1fr 1fr 1fr; gap:10px; align-items:center; padding: 8px 0; }
+.thead{ font-weight:600; border-bottom:1px solid #e2e8f0; }
+.row{ border-bottom:1px dashed #e2e8f0; }
+.mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; }
+.link{ background:transparent; border:0; color:#0ea5e9; cursor:pointer; text-decoration:underline; padding:0; }
+.ok{ color: #16a34a; }
+.err{ color: #dc2626; }
+.empty{ padding: 12px; opacity:.7; }

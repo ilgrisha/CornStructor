@@ -1,0 +1,27 @@
+/* ============================================================================
+ * Path: frontend/src/app/features/params/params.component.css
+ * Version: v2.3.2
+ * ==========================================================================*/
+.card--compact{padding:10px}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.title{font-weight:600;color:#0f172a;font-size:14px}
+.group{border-top:1px solid #eef1f4;padding-top:8px;margin-top:8px}
+.group:first-of-type{border-top:none;margin-top:0;padding-top:0}
+.group-title{font-weight:600;color:#111827;margin-bottom:6px;font-size:12px}
+.row.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
+  gap:8px 10px;
+}
+.grid-2{grid-template-columns:repeat(2,minmax(130px,1fr))}
+.grid-3{grid-template-columns:repeat(3,minmax(130px,1fr))}
+.control{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;color:#374151}
+.control input[type=number]{
+  height:28px;min-width:86px;max-width:120px;
+  border:1px solid #d1d5db;border-radius:10px;padding:0 8px;
+  background:#f9fafb;font-size:12px;
+}
+.control input[type=number]:focus{
+  outline:none;border-color:#3b82f6;
+  box-shadow:0 0 0 3px rgba(59,130,246,.12);background:#fff;
+}

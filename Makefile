@@ -1,32 +1,37 @@
 # File: Makefile
-# Version: v0.1.3
+# Version: v0.6.0
+.PHONY: help dev dev-down prod-build prod-up prod-down logs doctor
 
-.PHONY: venv install test lint fmt bench
+help:
+	@echo "Targets:"
+	@echo "  dev        - start live-reload dev stack"
+	@echo "  dev-down   - stop dev stack"
+	@echo "  prod-build - build production images"
+	@echo "  prod-up    - start production stack"
+	@echo "  prod-down  - stop production stack"
+	@echo "  logs       - tail logs from all services"
+	@echo "  doctor     - diagnose Docker/compose environment"
 
-VENV?=backend/.venv
-PY?=$(VENV)/bin/python
-PIP?=$(VENV)/bin/pip
-PYTEST?=$(VENV)/bin/pytest
-RUFF?=$(VENV)/bin/ruff
-BLACK?=$(VENV)/bin/black
+dev:
+	docker compose --env-file .compose.env -f docker-compose.dev.yml up --build
 
-venv:
-	python3 -m venv $(VENV)
+dev-down:
+	docker compose --env-file .compose.env -f docker-compose.dev.yml down -v
 
-install: venv
-	$(PIP) install -U pip
-	$(PIP) install -r backend/requirements.txt
-	$(PIP) install black ruff mypy
+prod-build:
+	docker compose --env-file .compose.env -f docker-compose.yml build
 
-test:
-	PYTHONPATH=$(PWD) $(PYTEST) -q
+prod-up:
+	docker compose --env-file .compose.env -f docker-compose.yml up -d --build
 
-lint:
-	$(RUFF) backend
-	mypy backend
+prod-down:
+	docker compose --env-file .compose.env -f docker-compose.yml down -v
 
-fmt:
-	$(BLACK) backend
+logs:
+	docker compose logs -f --tail=200
 
-bench:
-	PYTHONPATH=$(PWD) $(PY) backend/app/bench/bench_fitness.py
+doctor:
+	@echo "== Docker version ==" && docker version || true
+	@echo "== Docker contexts ==" && docker context ls || true
+	@echo "== Using env-file ==" && /bin/echo ".compose.env"
+	@echo "== docker ps test ==" && docker ps || true
