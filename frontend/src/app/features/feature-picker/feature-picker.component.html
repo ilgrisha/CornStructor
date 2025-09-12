@@ -1,45 +1,59 @@
-<!-- =========================================================================
-     Path: frontend/src/app/features/feature-picker/feature-picker.component.html
-     Version: v2.0.0
-     ========================================================================= -->
-<div class="card">
+<!-- File: frontend/src/app/features/feature-picker/feature-picker.component.html -->
+<!-- Version: v2.1.0 -->
+<div class="card compact">
   <div class="card-header">
-    <div class="title">Detected features</div>
+    <div class="title">Detected</div>
   </div>
 
-  <!-- Kind selector -->
-  <div class="kinds">
+  <!-- Small chips row -->
+  <div class="kinds kinds--compact">
     <button
-      class="chip"
+      class="chip chip--xs"
       *ngFor="let k of kinds()"
       [class.active]="a.selectedKind() === k"
       (click)="selectKind(k)">
       <span class="dot" [style.background]="a.featureColor(k)"></span>
-      {{ k }} <span class="count">{{ counts()[k] }}</span>
+      <span class="name">{{ k }}</span>
+      <span class="count">{{ counts()[k] }}</span>
     </button>
-    <button class="chip clear" *ngIf="a.selectedKind()" (click)="clearKind()">Clear</button>
+    <button class="chip chip--xs clear" *ngIf="a.selectedKind()" (click)="clearKind()">Clear</button>
   </div>
 
-  <!-- Scrollable ranges area (vertical only). No horizontal scroll. -->
-  <div class="ranges-scroll">
-    <!-- Pinned selected row (sticky at top) -->
-    <div class="pinned" *ngIf="selected()">
+  <!-- Tiny status row for stems -->
+  <div class="status" *ngIf="a.selectedKind()==='stems' || a.stemsLoading() || a.stemsError()">
+    <ng-container *ngIf="a.stemsLoading(); else doneOrErr">
+      <span class="pulse"></span> calculating secondary structure…
+    </ng-container>
+    <ng-template #doneOrErr>
+      <ng-container *ngIf="a.stemsError(); else ok">
+        <span class="err">secondary-structure error:</span>
+        <span class="err-msg">{{ a.stemsError() }}</span>
+      </ng-container>
+      <ng-template #ok>
+        <span class="ok">secondary structure updated</span>
+      </ng-template>
+    </ng-template>
+  </div>
+
+  <!-- Shorter scroll area for ranges -->
+  <div class="ranges-scroll ranges-scroll--short">
+    <!-- Pinned selected row -->
+    <div class="pinned pinned--xs" *ngIf="selected()">
       <span class="swatch" [style.background]="kindColor()"></span>
       <div class="cols">
         <div><span class="label">start</span><span class="mono">{{ selected()!.start + 1 }}</span></div>
         <div><span class="label">end</span><span class="mono">{{ selected()!.end }}</span></div>
-        <div><span class="label">length</span><span class="mono">{{ len(selected()!) }}</span></div>
+        <div><span class="label">len</span><span class="mono">{{ len(selected()!) }}</span></div>
       </div>
       <button class="link" (click)="clearRange()">Clear</button>
     </div>
 
-    <!-- Compact 3-column table -->
     <table *ngIf="ranges().length; else noSel">
       <thead>
         <tr>
           <th>start</th>
           <th>end</th>
-          <th>length</th>
+          <th>len</th>
         </tr>
       </thead>
       <tbody>
@@ -54,7 +68,7 @@
     </table>
 
     <ng-template #noSel>
-      <div class="empty">Choose a feature above to see its merged ranges.</div>
+      <div class="empty">Choose a feature above to see ranges.</div>
     </ng-template>
   </div>
 </div>

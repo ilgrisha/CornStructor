@@ -1,24 +1,17 @@
-// File: frontend/src/app/core/services/analysis.service.ts
-// Version: v0.5.0
+/* File: frontend/src/app/core/services/analysis.service.ts
+/* Version: v0.5.0
 /*==========================================================================
-Stems UX for long sequences
+Stems server-call only on sequence changes; params re-filter locally.
 
-Goal:
-- Server computation (ViennaRNA) can be slow → show a "computing…" indicator.
-- Do NOT re-run ViennaRNA when user tweaks stems params. Instead, reuse the
-  previously computed raw paired runs and only re-merge/filter on the client.
+- Calls ViennaRNA backend *only* when the sequence actually changes.
+- Caches the "base" stems runs from server using (min_stem_len=1, merge_max_gap=0).
+  These are raw consecutive paired runs derived from MFE dot-bracket.
+- Applies UI parameters (stemMinLen, stemMergeMaxGap) *locally* to the cached runs,
+  so changing parameters is instant and does NOT call the server.
+- Keeps debounced auto-refresh on sequence edits/uploads (default 300 ms).
+- Exposes stemsLoading() and stemsError() so UI can show status banners.
 
-What changed (v0.5.0):
-- `stemsLoading`: boolean signal to show "secondary structure is being computed".
-- `stemsRawRuns`: stores *raw* consecutive-paired runs from the server.
-  We fetch them by calling the backend once with min_stem_len=1 and merge_max_gap=0.
-- Client-side derivation:
-    stems = mergeWithGap(stemsRawRuns, stemMergeMaxGap) then filter by stemMinLen.
-- Auto refresh triggers ONLY on sequence change (debounced). Param changes only
-  recompute client-side derived ranges (instant).
-- `refreshStems()` still available (used when selecting "stems", on upload, etc.)
-
-API base remains `/api`; backend route is `/api/analysis/stems`.
+Other analyses (homopolymers, GC, entropy, repeats, long-repeats) unchanged.
 ==========================================================================*/
 import { Injectable, computed, signal, WritableSignal, effect } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
@@ -57,19 +50,18 @@ export interface AnalysisParams {
   longRepMinLen: number;
   longRepMinPct: number;
 
+  // Secondary structure (client-side filtering of cached raw stems)
   stemMinLen: number;
   stemMergeMaxGap: number;
 }
 
 const API_BASE = '/api';
 
-type Interval = { start: number; end: number };
-
 @Injectable({ providedIn: 'root' })
 export class AnalysisService {
   constructor(private http: HttpClient) {}
 
-  // ---- state ----
+  // ---- sequence state ----
   sequence: WritableSignal<string> = signal('');
 
   invalid = computed(() => {
@@ -84,6 +76,7 @@ export class AnalysisService {
 
   length = computed(() => this.sequence().length);
 
+  // ---- parameters ----
   params: WritableSignal<AnalysisParams> = signal({
     homoMin: 6,
     gcWin: 100,
@@ -102,8 +95,6 @@ export class AnalysisService {
 
   updateParam<K extends keyof AnalysisParams>(key: K, value: AnalysisParams[K]) {
     this.params.update(p => ({ ...p, [key]: value }));
-    // IMPORTANT: do NOT call the server here for stems; we will re-derive locally below.
-    if (key === 'stemMinLen' || key === 'stemMergeMaxGap') this._deriveStemsFromRaw();
   }
 
   featureColor(k: FeatureKind): string {
@@ -313,17 +304,30 @@ export class AnalysisService {
     return this.merge(out);
   });
 
-  // ---- stems (server + client-side derivation) ----
-  /** Raw consecutive-paired runs returned by the server once per sequence. */
-  private stemsRawRuns: WritableSignal<Interval[]> = signal<Interval[]>([]);
-  /** Final stems regions after client-side merge/filter according to params. */
-  private stems = signal<FeatureRegion[]>([]);
-  /** Loading flag for UX ("computing secondary structure…"). */
-  stemsLoading: WritableSignal<boolean> = signal(false);
-  /** Optional last error text (for logging/UI if desired). */
-  stemsError: WritableSignal<string | null> = signal(null);
+  // ---- stems (server only on sequence change) ----
+  /** Raw consecutive paired runs from the server (computed with min=1, gap=0), cached per-sequence. */
+  private stemsBase = signal<FeatureRegion[]>([]);
+  /** Loading & error for UI feedback */
+  private _stemsLoading = signal<boolean>(false);
+  private _stemsError = signal<string | null>(null);
 
-  /** Public map consumed by UI */
+  /** Expose status to components */
+  stemsLoading = () => this._stemsLoading();
+  stemsError = () => this._stemsError();
+
+  /** Apply current UI params to cached raw stems locally (merge + min length). */
+  private stemsFiltered = computed<FeatureRegion[]>(() => {
+    const base = this.stemsBase();
+    const { stemMinLen, stemMergeMaxGap } = this.params();
+
+    // Merge adjacent if gap <= stemMergeMaxGap (kind is 'stems' for all).
+    const merged = this.mergeWithGap(base, stemMergeMaxGap);
+    // Filter by minimal length
+    const kept = merged.filter(r => (r.end - r.start) >= Math.max(1, Math.floor(stemMinLen)));
+    return kept;
+  });
+
+  /** Public map consumed by the UI */
   resultByKind = computed<Record<FeatureKind, FeatureRegion[]>>(() => ({
     homopolymers: this.homopolymers(),
     'gc-low': this.gcBands().lows,
@@ -331,10 +335,10 @@ export class AnalysisService {
     'entropy-low': this.entropyLow(),
     repeats: this.repeats(),
     'long-repeats': this.longRepeats(),
-    stems: this.stems(),
+    stems: this.stemsFiltered(),
   }));
 
-  // --- selection model (shared by pickers/results/sequence box) ---
+  // ---- selection state ----
   selectedKind: WritableSignal<FeatureKind | null> = signal(null);
   selectedRange: WritableSignal<FeatureRegion | null> = signal(null);
 
@@ -356,111 +360,53 @@ export class AnalysisService {
     this.selectedRange.set(r);
   }
 
-  /** Call the backend ONCE per sequence to compute raw paired runs. */
+  /** Manually force a stems recomputation from the server (uses raw settings). */
   async refreshStems(): Promise<void> {
     const seq = (this.sequence() || '').toUpperCase().replace(/\s+/g, '');
-    if (!seq) {
-      this.stemsRawRuns.set([]);
-      this.stems.set([]);
-      this.stemsLoading.set(false);
-      this.stemsError.set(null);
-      return;
-    }
+    if (!seq) { this.stemsBase.set([]); return; }
 
-    // Tell UI we're computing
-    this.stemsLoading.set(true);
-    this.stemsError.set(null);
-
-    // Ask backend for the most primitive representation:
-    // - min_stem_len=1 (keep any non-empty paired run)
-    // - merge_max_gap=0 (do NOT merge separate runs)
+    // Call backend with minimal filtering so we cache raw paired runs.
     const body = { sequence: seq, min_stem_len: 1, merge_max_gap: 0 };
 
     try {
+      this._stemsLoading.set(true);
+      this._stemsError.set(null);
       const resp = await firstValueFrom(
         this.http.post<{ length: number; regions: { start: number; end: number }[] }>(
           `${API_BASE}/analysis/stems`,
           body
         )
       );
-      const raw: Interval[] = (resp?.regions || []).map(r => ({ start: r.start, end: r.end }));
-      this.stemsRawRuns.set(this._normalized(raw));
-      // Apply current params locally
-      this._deriveStemsFromRaw();
+      const regions: FeatureRegion[] = (resp?.regions || []).map(r => ({
+        kind: 'stems', start: r.start, end: r.end,
+      }));
+      // No further merging/filtering here; stemsFiltered() applies UI params on the fly.
+      this.stemsBase.set(this.sortNormalize(regions));
     } catch (err: any) {
       console.error('Stems analysis failed:', err);
-      this.stemsRawRuns.set([]);
-      this.stems.set([]);
-      this.stemsError.set(String(err?.message ?? err));
+      this._stemsError.set(err?.message ?? 'Unknown error');
+      this.stemsBase.set([]);
     } finally {
-      this.stemsLoading.set(false);
+      this._stemsLoading.set(false);
     }
   }
 
-  /** Client-side derivation: merge with gap + filter by min length (fast, no server). */
-  private _deriveStemsFromRaw(): void {
-    const raw = this.stemsRawRuns();
-    if (!raw.length) { this.stems.set([]); return; }
-    const { stemMergeMaxGap, stemMinLen } = this.params();
-    const merged = this._mergeWithGap(raw, Math.max(0, Math.floor(stemMergeMaxGap)));
-    const filtered = merged
-      .filter(iv => iv.end - iv.start >= Math.max(1, Math.floor(stemMinLen)))
-      .map(iv => ({ kind: 'stems', start: iv.start, end: iv.end } as FeatureRegion));
-    this.stems.set(filtered);
-  }
-
-  // ---- debounced auto-refresh ONLY when sequence changes ----
+  // ---- debounced auto-refresh when *sequence* changes ONLY ----
   private _stemsDebounce: any = null;
   private _stemsEffect = effect(
     () => {
-      const _seq = this.sequence(); // dependency (ONLY sequence)
+      const _seq = this.sequence(); // dependency: sequence only
       void _seq;
 
       if (this._stemsDebounce) clearTimeout(this._stemsDebounce);
-      this._stemsDebounce = setTimeout(() => { void this.refreshStems(); }, 300);
+      this._stemsDebounce = setTimeout(() => {
+        void this.refreshStems();
+      }, 300); // debounce 300ms after last change
     },
     { allowSignalWrites: true }
   );
 
   // ---- helpers ----
-  /** Normalize/clean intervals (sort + coalesce if overlapping/touching). */
-  private _normalized(list: Interval[]): Interval[] {
-    if (list.length <= 1) return list.slice().sort((a, b) => a.start - b.start);
-    const arr = list.slice().sort((a, b) => a.start - b.start);
-    const out: Interval[] = [];
-    let cur = { ...arr[0] };
-    for (let i = 1; i < arr.length; i++) {
-      const r = arr[i];
-      if (r.start <= cur.end) {
-        cur.end = Math.max(cur.end, r.end);
-      } else {
-        out.push(cur);
-        cur = { ...r };
-      }
-    }
-    out.push(cur);
-    return out;
-  }
-
-  /** Merge adjacent intervals if the gap between them is <= maxGap. */
-  private _mergeWithGap(runs: Interval[], maxGap: number): Interval[] {
-    if (!runs.length) return [];
-    const arr = this._normalized(runs);
-    const out: Interval[] = [arr[0]];
-    for (let i = 1; i < arr.length; i++) {
-      const prev = out[out.length - 1];
-      const cur = arr[i];
-      const gap = cur.start - prev.end;
-      if (gap <= maxGap) {
-        prev.end = Math.max(prev.end, cur.end);
-      } else {
-        out.push({ ...cur });
-      }
-    }
-    return out;
-  }
-
-  /** Generic merge helper for FeatureRegion (used by other analyses). */
   private merge(list: FeatureRegion[]): FeatureRegion[] {
     if (list.length <= 1) return list.slice();
     const arr = list.slice().sort((a, b) => a.start - b.start);
@@ -477,5 +423,36 @@ export class AnalysisService {
     }
     out.push(cur);
     return out;
+  }
+
+  /** Merge adjacent intervals if the gap (start - prev.end) ≤ maxGap. Assumes same kind. */
+  private mergeWithGap(list: FeatureRegion[], maxGap: number): FeatureRegion[] {
+    if (list.length <= 1) return list.slice();
+    const arr = this.sortNormalize(list);
+    const out: FeatureRegion[] = [];
+    let cur = { ...arr[0] };
+    for (let i = 1; i < arr.length; i++) {
+      const r = arr[i];
+      const gap = r.start - cur.end;
+      if (gap <= Math.max(0, Math.floor(maxGap))) {
+        cur.end = Math.max(cur.end, r.end);
+      } else {
+        out.push(cur);
+        cur = { ...r };
+      }
+    }
+    out.push(cur);
+    return out;
+  }
+
+  private sortNormalize(list: FeatureRegion[]): FeatureRegion[] {
+    const arr = list.slice().sort((a, b) => a.start - b.start || a.end - b.end);
+    // Also clamp negatives and ensure start <= end
+    return arr.map(r => ({
+      kind: r.kind,
+      start: Math.max(0, Math.min(r.start, r.end)),
+      end: Math.max(0, Math.max(r.start, r.end)),
+      meta: r.meta
+    }));
   }
 }

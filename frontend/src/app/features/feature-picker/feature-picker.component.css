@@ -1,84 +1,97 @@
-/* ============================================================================
- * Path: frontend/src/app/features/feature-picker/feature-picker.component.css
- * Version: v2.0.0
- * ============================================================================
- * Matches the cleaner Results UI:
- * - chip row
- * - pinned selected row
- * - compact table
- * ==========================================================================*/
+/* File: frontend/src/app/features/feature-picker/feature-picker.component.css
+ * Version: v2.1.0
+ * Compact styling for the Detected panel.
+ */
 :host{ display:block; }
 
-.card{
+.card.compact{
   background:#fff;
-  border:1px solid #e5e5ea;
-  border-radius:16px;
-  box-shadow:0 1px 3px rgba(0,0,0,.06);
-  padding:12px;
-  overflow:visible;   /* ensure only the table scrolls */
+  border:1px solid #e5e7eb;
+  border-radius:14px;
+  box-shadow:0 1px 2px rgba(0,0,0,.05);
+  padding:8px;                 /* tighter padding */
 }
 
 .card-header{ margin-bottom:6px; }
-.title{ font-weight:600; color:#0f172a; }
+.title{ font-weight:600; color:#0f172a; font-size:13px; }
 
 .kinds{
-  display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px;
+  display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px;
 }
+.kinds--compact{ gap:4px; }
 .chip{
   display:inline-flex; align-items:center; gap:6px;
   border:1px solid #e5e7eb; background:#f8fafc; color:#334155;
   border-radius:999px; padding:4px 10px; font-size:12px; cursor:pointer;
 }
+.chip--xs{
+  padding:2px 8px;            /* smaller chip */
+  font-size:11px;
+  gap:4px;
+}
 .chip.active{ background:#eef2ff; border-color:#c7d2fe; color:#1e293b; }
 .chip.clear{ background:#fff; }
-.dot{ width:10px; height:10px; border-radius:50%; display:inline-block; }
-.count{ margin-left:4px; color:#475569; }
+.dot{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+.count{ margin-left:2px; color:#475569; }
 
+/* Status row (very compact) */
+.status{
+  display:flex; align-items:center; gap:6px;
+  font-size:11px; color:#475569; margin:2px 2px 6px 2px;
+}
+.pulse{
+  width:6px; height:6px; border-radius:50%;
+  background:#60a5fa; display:inline-block; animation:pulse 1s infinite ease-in-out;
+}
+@keyframes pulse{ 0%{opacity:1} 50%{opacity:.25} 100%{opacity:1} }
+.ok{ color:#16a34a; }
+.err{ color:#b91c1c; font-weight:600; }
+.err-msg{ color:#7f1d1d; }
+
+/* Shorter ranges scroll */
 .ranges-scroll{
-  max-height:34vh;            /* vertical scroll area */
-  overflow-y:auto;
-  overflow-x:hidden;          /* no horizontal scroll */
-  border:1px solid #e5e7eb;
-  border-radius:10px;
+  max-height:34vh; overflow-y:auto; overflow-x:hidden;
+  border:1px solid #e5e7eb; border-radius:10px;
 }
+.ranges-scroll--short{ max-height:22vh; }  /* ← shorter table area */
 
-/* Pinned selected row */
+/* Pinned row (extra small) */
 .pinned{
-  position: sticky; top: 0; z-index: 2;
-  display:flex; align-items:center; gap:10px;
+  position:sticky; top:0; z-index:2;
+  display:flex; align-items:center; gap:8px;
   background:#fff; border-bottom:1px solid #e5e7eb;
-  padding:8px 10px;
+  padding:6px 8px;
 }
-.pinned .swatch{ width:10px; height:10px; border-radius:50%; display:inline-block; }
-.pinned .cols{ display:flex; gap:14px; flex:1 1 auto; }
-.pinned .label{ font-size:11px; color:#64748b; margin-right:4px; text-transform:uppercase; }
-
-/* Smaller numbers for start / end / length in pinned bar */
+.pinned--xs{ padding:4px 6px; }
+.pinned .swatch{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+.pinned .cols{ display:flex; gap:10px; flex:1 1 auto; }
+.pinned .label{ font-size:10px; color:#64748b; margin-right:4px; text-transform:uppercase; }
 .pinned .mono{
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
   font-variant-numeric:tabular-nums;
-  font-size:11px;              /* smaller than table cells */
-  line-height:1.2;
-  color:#0f172a;
+  font-size:10px; line-height:1.1; color:#0f172a;
+}
+.link{
+  background:none; border:none; color:#2563eb; font-size:11px; cursor:pointer; padding:0;
 }
 
 /* Compact table */
 table{
   width:100%;
   border-collapse:collapse;
-  table-layout:fixed;       /* ensures no horizontal scroll, columns share width */
-  font-size:12px;
+  table-layout:fixed;
+  font-size:11px;             /* smaller text */
 }
 thead th{
   text-align:left; font-weight:600; color:#475569;
-  padding:6px 10px; border-bottom:1px solid #e5e7eb;
+  padding:4px 8px; border-bottom:1px solid #e5e7eb;
 }
 tbody td{
-  padding:6px 10px; border-bottom:1px solid #f1f5f9; white-space:nowrap;
+  padding:4px 8px; border-bottom:1px solid #f1f5f9; white-space:nowrap;
 }
 tbody tr{ cursor:pointer; }
 tbody tr:hover{ background:#f8fafc; }
 tbody tr.selected{ background:#eef2ff; }
 
 .mono{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-variant-numeric:tabular-nums; }
-.empty{ color:#64748b; font-size:12px; padding:10px; }
+.empty{ color:#64748b; font-size:11px; padding:8px; }
