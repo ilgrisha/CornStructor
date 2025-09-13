@@ -1,16 +1,17 @@
 # File: backend/app/core/pipeline/py_runner.py
-# Version: v0.1.1
+# Version: v0.1.2
 """
 In-process CornStructor pipeline runner.
 
-v0.1.1:
-- Generate index.html with a robust, manifest-free writer that lists whatever
-  artifacts are present (write_run_index_simple).
+v0.1.2:
+- After exporting GA progress, save its JSON payload into the Design (DB) so that
+  live reports can be generated on-the-fly without reading from the reports folder.
 """
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Callable, Optional
+import json
 import logging
 
 from backend.app.core.assembly.hierarchical_assembler import HierarchicalAssembler
@@ -27,8 +28,11 @@ from backend.app.core.visualization.ga_progress_html_report import export_ga_pro
 from backend.app.core.visualization.cluster_html_report import export_all_levels
 from backend.app.core.visualization.tree_html_exporter import export_tree_to_html
 
-# NEW robust index writer
 from backend.app.core.visualization.run_index_simple import write_run_index_simple
+
+# NEW: persist GA progress to DB
+from backend.app.db.session import SessionLocal
+from backend.app.services.design_store import save_ga_progress
 
 
 class _SSELogHandler(logging.Handler):
@@ -93,6 +97,17 @@ def execute_pipeline(
     ga_json = export_ga_progress_json(root, outdir / "ga_progress.json", root_id=job_id)
     export_ga_progress_html(ga_json, outdir / "ga_progress.html")
     emit_log and emit_log("Exported GA progress reports")
+
+    # Persist GA progress JSON to DB for live rendering
+    try:
+        db = SessionLocal()
+        try:
+            save_ga_progress(db, job_id=job_id, ga_progress_json=json.dumps(ga_json))
+            emit_log and emit_log("Saved GA progress to database")
+        finally:
+            db.close()
+    except Exception as ex:
+        emit_log and emit_log(f"WARN: failed to save GA progress to DB: {ex}")
 
     analysis_json = analyze_tree_to_json(root, outdir / "analysis.json", root_id=job_id)
     export_analysis_html(analysis_json, outdir / "analysis.html")

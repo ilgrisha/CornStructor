@@ -1,6 +1,6 @@
 # File: backend/app/db/schemas/design.py
-# Version: v0.1.0
-"""Pydantic schemas for Design resources."""
+# Version: v0.2.0
+"""Pydantic schemas for Design resources (includes GA progress)."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -15,6 +15,7 @@ class DesignBase(BaseModel):
     sequence_len: int
     params_json: Optional[str] = Field(None, description="Creation parameters JSON (globals + levels)")
     tree_json: Optional[str] = Field(None, description="Serialized construction tree JSON")
+    ga_progress_json: Optional[str] = Field(None, description="GA progress timeline JSON")
     name: Optional[str] = None
 
     class Config:

@@ -1,21 +1,6 @@
 # File: backend/app/services/design_store.py
-# Version: v0.2.1
-"""Service-layer helpers for Design persistence and run linkage.
-
-Functions
----------
-create_design_with_run(db, job_id, sequence, params_json) -> (Run, Design)
-    Create a RUNNING Run and an associated Design in one transaction.
-
-attach_tree_to_design(db, job_id, tree_json) -> bool
-    Persist the serialized tree JSON into the Design associated with a Run.
-
-get_design_by_run(db, job_id) -> Optional[Design]
-    Fetch the Design associated with a given Run (by job_id).
-
-mark_run_completed(db, job_id, report_url, exit_code) -> None
-    Update Run status (COMPLETED/FAILED), report_url and exit_code.
-"""
+# Version: v0.3.0
+"""Service-layer helpers for Design persistence and run linkage."""
 from __future__ import annotations
 
 from typing import Optional, Tuple
@@ -46,7 +31,7 @@ def create_design_with_run(
     run.design = design
 
     db.add(run)
-    db.flush()  # assign PKs
+    db.flush()
     db.commit()
     db.refresh(run)
     db.refresh(design)
@@ -62,6 +47,20 @@ def attach_tree_to_design(db: Session, *, job_id: str, tree_json: str) -> bool:
     if design is None:
         return False
     design.tree_json = tree_json
+    db.add(design)
+    db.commit()
+    return True
+
+
+def save_ga_progress(db: Session, *, job_id: str, ga_progress_json: str) -> bool:
+    """Persist GA progress JSON into the Design linked to a Run."""
+    run = db.execute(select(Run).where(Run.job_id == job_id)).scalar_one_or_none()
+    if not run or not run.design_id:
+        return False
+    design = db.get(Design, run.design_id)
+    if design is None:
+        return False
+    design.ga_progress_json = ga_progress_json
     db.add(design)
     db.commit()
     return True

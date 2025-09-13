@@ -1,21 +1,12 @@
 # File: backend/app/db/models.py
-# Version: v0.2.0
+# Version: v0.3.0
 """
 ORM models for CornStructor.
 
 Tables:
 - Run: a single pipeline execution (aka "job") with its report URL and status.
-- Design: persisted construction-tree design (sequence, params, serialized tree)
-          linked 1:1 to a Run via `runs.design_id`.
-
-Notes
------
-We model `job_id` on Run as a unique external identifier (short hex) used by the
-API and filesystem folder names under `/reports/{job_id}`.
-
-We intentionally keep the serialized construction tree as JSON in `Design.tree_json`
-for simplicity and portability. In the future we can project parts of the tree
-into relational tables if we need granular queries over nodes and edges.
+- Design: persisted construction-tree design (sequence, params, serialized tree,
+          and optional GA progress) linked 1:1 to a Run via `runs.design_id`.
 """
 from __future__ import annotations
 
@@ -40,12 +31,10 @@ class RunStatus(str, PyEnum):
 class Design(Base):
     """Persisted construction-tree design.
 
-    Stores the input DNA `sequence`, all creation parameters as JSON
-    (both global and per-level under a single JSON blob), and the serialized
-    construction tree JSON (see backend/app/core/export/json_exporter.py).
-
-    The `run` relationship is optional to allow preparing a design before
-    executing a run, but in CornStructor we create both together (1:1).
+    Stores the input DNA `sequence`, creation parameters as JSON
+    (both global and per-level under a single JSON blob), the serialized
+    construction tree JSON (`tree_json`), and optional GA progress JSON
+    (`ga_progress_json`) to support on-the-fly report generation.
     """
     __tablename__ = "designs"
 
@@ -58,6 +47,7 @@ class Design(Base):
     sequence_len: Mapped[int] = mapped_column(Integer, nullable=False)
     params_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)   # JSON string (globals + levels)
     tree_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)     # JSON string (export_tree_to_json)
+    ga_progress_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string (export_ga_progress_json)
 
     # Optional friendly label
     name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)

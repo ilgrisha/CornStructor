@@ -1,64 +1,104 @@
 # File: backend/app/api/v1/runs.py
-# Version: v0.1.0
+# Version: v0.5.0
 """
-Runs API
+Runs API.
 
-Endpoints:
-- GET  /runs            -> list runs (q, limit, offset)
-- GET  /runs/{job_id}   -> get a run
-- DELETE /runs/{job_id} -> delete a run (does not remove report files)
+Updates in v0.5.0
+-----------------
+- Correct total counting for SQLAlchemy 2.0 (COUNT(*)).
+- Return `updated_at` in the list so the UI can react to recent changes.
+- Explicit ordering by created_at DESC, id DESC for stable pagination.
+- Add `Cache-Control: no-store` to avoid any intermediary caching.
+
+Endpoints
+---------
+GET    /runs                 List runs (with pagination)
+DELETE /runs/{job_id}        Delete a run, its linked design, and (optionally) its artifacts
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from datetime import datetime
+from typing import Optional, List
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from pydantic import BaseModel
+from sqlalchemy import select, desc, func
 from sqlalchemy.orm import Session
 
 from backend.app.db.session import get_db
-from backend.app.db.schemas.run import RunItem, RunDetail, RunListResponse
-from backend.app.services.run_store import list_runs as svc_list_runs, get_run as svc_get_run, delete_run as svc_delete_run
+from backend.app.db.models import Run
+from backend.app.services.run_ops import delete_run_and_design
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
+
+# ---------- Schemas ----------
+class RunItem(BaseModel):
+    job_id: str
+    status: str
+    sequence_len: Optional[int] = None
+    report_url: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RunListResponse(BaseModel):
+    items: List[RunItem]
+    total: int
+
+
+# ---------- Endpoints ----------
 @router.get("", response_model=RunListResponse)
-def list_runs(q: str | None = Query(default=None, description="Filter by job_id or note"),
-              limit: int = Query(default=50, ge=1, le=200),
-              offset: int = Query(default=0, ge=0),
-              db: Session = Depends(get_db)):
-    total, items = svc_list_runs(db, q=q, limit=limit, offset=offset)
-    return RunListResponse(
-        total=total,
-        items=[RunItem(
-            job_id=r.job_id,
-            status=r.status.value,
-            created_at=r.created_at,
-            updated_at=r.updated_at,
-            report_url=r.report_url,
-            exit_code=r.exit_code,
-            sequence_len=r.sequence_len,
-            note=r.note,
-        ) for r in items],
+def list_runs(
+    response: Response,
+    db: Session = Depends(get_db),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    q: Optional[str] = Query(None, description="Filter by job_id substring"),
+):
+    """
+    Return paginated runs ordered by newest first.
+
+    Notes:
+    - Uses COUNT(*) for total (SQLAlchemy 2.0).
+    - Ordered by created_at DESC, id DESC for stability across inserts.
+    """
+    # Base statements
+    stmt_base = select(Run)
+    count_base = select(func.count()).select_from(Run)
+
+    if q:
+        like = f"%{q}%"
+        stmt_base = stmt_base.where(Run.job_id.like(like))
+        count_base = count_base.where(Run.job_id.like(like))
+
+    total: int = int(db.scalar(count_base) or 0)
+
+    rows = (
+        db.execute(
+            stmt_base.order_by(desc(Run.created_at), desc(Run.id)).limit(limit).offset(offset)
+        )
+        .scalars()
+        .all()
     )
 
-@router.get("/{job_id}", response_model=RunDetail)
-def get_run(job_id: str, db: Session = Depends(get_db)):
-    r = svc_get_run(db, job_id)
-    if not r:
-        raise HTTPException(status_code=404, detail="Run not found")
-    return RunDetail(
-        job_id=r.job_id,
-        status=r.status.value,
-        created_at=r.created_at,
-        updated_at=r.updated_at,
-        report_url=r.report_url,
-        exit_code=r.exit_code,
-        sequence_len=r.sequence_len,
-        note=r.note,
-        params_json=r.params_json,
-    )
+    items = [RunItem.model_validate(r) for r in rows]
 
-@router.delete("/{job_id}", status_code=204)
-def delete_run(job_id: str, db: Session = Depends(get_db)):
-    ok = svc_delete_run(db, job_id)
+    # Avoid caching (the UI expects fresh lists)
+    response.headers["Cache-Control"] = "no-store"
+    return RunListResponse(items=items, total=total)
+
+
+@router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_run(
+    job_id: str,
+    db: Session = Depends(get_db),
+    delete_reports: bool = Query(True, description="Also delete /reports/<job_id> folder"),
+):
+    ok = delete_run_and_design(db, job_id=job_id, delete_reports=delete_reports)
     if not ok:
         raise HTTPException(status_code=404, detail="Run not found")
-    return
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
