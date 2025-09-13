@@ -1,16 +1,20 @@
 // File: frontend/src/app/features/runs-history/runs-history.component.ts
-// Version: v0.2.0
+// Version: v0.3.0
 /**
  * RunsHistoryComponent
  * Modal listing previous runs pulled from /api/runs.
  *
- * - Uses `search: string` bound via [(ngModel)].
- * - On open (at init or later), auto-refreshes the list.
+ * New in v0.3.0:
+ * - Emits (loadDesign) with the selected run's job_id.
+ * - Convenience method loadDesignAndApply() that fetches the Design and updates
+ *   the global AnalysisService.sequence so the Sequence Box reflects it.
  */
 import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RunsService, RunItem } from '../../core/services/runs.service';
+import { DesignService } from '../../core/services/design.service';
+import { AnalysisService } from '../../core/services/analysis.service';
 
 @Component({
   selector: 'app-runs-history',
@@ -22,39 +26,54 @@ import { RunsService, RunItem } from '../../core/services/runs.service';
 export class RunsHistoryComponent implements OnInit, OnChanges {
   @Input() open = false;
   @Output() close = new EventEmitter<void>();
+  /** Fired when the user chooses a run (job_id). */
+  @Output() loadDesign = new EventEmitter<string>();
 
-  /** Search query bound to the input field. */
   search = '';
-
-  /** Items returned by the API. */
+  loading = signal(false);
   items = signal<RunItem[]>([]);
 
-  /** Loading state for the table. */
-  loading = signal<boolean>(false);
+  constructor(
+    private runs: RunsService,
+    private designs: DesignService,
+    private analysis: AnalysisService
+  ) {}
 
-  constructor(private runs: RunsService) {}
-
-  ngOnInit() {
+  ngOnInit(): void {
     if (this.open) this.refresh();
   }
 
-  ngOnChanges(changes: SimpleChanges): void {
-    // If the modal just opened after initial render, fetch data.
-    if (changes['open'] && this.open) {
-      this.refresh();
-    }
+  ngOnChanges(_: SimpleChanges): void {
+    if (this.open) this.refresh();
   }
 
-  /** Fetch runs from the API, applying an optional free-text filter. */
   refresh() {
     this.loading.set(true);
-    const q = this.search.trim() || null;
+    const q = this.search.trim().length ? this.search.trim() : null;
     this.runs.list(q, 100, 0).subscribe({
       next: res => {
         this.items.set(res.items);
         this.loading.set(false);
       },
       error: _ => this.loading.set(false),
+    });
+  }
+
+  /** Emit selection to parent. */
+  select(r: RunItem) {
+    this.loadDesign.emit(r.job_id);
+  }
+
+  /** Fetch the Design for a run and apply its sequence to the UI immediately. */
+  loadDesignAndApply(r: RunItem) {
+    this.designs.getByRun(r.job_id).subscribe({
+      next: d => {
+        this.analysis.sequence.set(d.sequence);
+        this.close.emit();
+      },
+      error: _ => {
+        // TODO: surface a toast/snackbar if desired
+      }
     });
   }
 
