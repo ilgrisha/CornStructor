@@ -1,8 +1,9 @@
 # File: backend/app/services/design_store.py
-# Version: v0.3.0
+# Version: v0.4.0
 """Service-layer helpers for Design persistence and run linkage."""
 from __future__ import annotations
 
+import json
 from typing import Optional, Tuple
 
 from sqlalchemy import select
@@ -61,6 +62,54 @@ def save_ga_progress(db: Session, *, job_id: str, ga_progress_json: str) -> bool
     if design is None:
         return False
     design.ga_progress_json = ga_progress_json
+    db.add(design)
+    db.commit()
+    return True
+
+
+def save_config_snapshot(
+    db: Session, *, job_id: str, globals_json: str, levels_json: str
+) -> bool:
+    """
+    Merge snapshots of globals/levels into Design.params_json for deterministic
+    re-rendering later.
+    Structure stored in params_json:
+        {
+          "globals": {...},
+          "levels": {...},
+          "analysisParams": <existing value if any or {} >
+        }
+    """
+    run = db.execute(select(Run).where(Run.job_id == job_id)).scalar_one_or_none()
+    if not run or not run.design_id:
+        return False
+    design = db.get(Design, run.design_id)
+    if not design:
+        return False
+
+    # base
+    try:
+        current = json.loads(design.params_json) if design.params_json else {}
+    except Exception:
+        current = {}
+    # keep previous analysis params if they existed
+    analysis_params = current.get("analysisParams", current if isinstance(current, dict) else {})
+
+    try:
+        gl = json.loads(globals_json)
+    except Exception:
+        gl = {}
+    try:
+        lv = json.loads(levels_json)
+    except Exception:
+        lv = {}
+
+    merged = {
+        "globals": gl,
+        "levels": lv,
+        "analysisParams": analysis_params,
+    }
+    design.params_json = json.dumps(merged)
     db.add(design)
     db.commit()
     return True

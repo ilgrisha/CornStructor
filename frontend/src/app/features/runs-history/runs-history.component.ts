@@ -1,14 +1,19 @@
 // File: frontend/src/app/features/runs-history/runs-history.component.ts
-// Version: v0.6.0
+// Version: v0.7.1
 /**
  * RunsHistoryComponent
- * Modal listing previous runs with infinite scroll + lightweight polling to
+ * Modal listing previous runs with infinite scroll + head polling to
  * prepend newly created/completed runs while the dialog is open.
  *
- * v0.6.0:
- *  - Add head polling (every 4s) to detect and prepend newly added runs
- *    without disrupting scroll or requiring user action.
- *  - Keep existing infinite scroll "load more" behavior for older pages.
+ * v0.7.1:
+ *  - Ensure the deleted run disappears immediately and the list refreshes
+ *    from the server after deletion succeeds (no need to close/reopen).
+ *    * Optimistic removal from `items` for instant UI feedback.
+ *    * On success: call `resetAndLoad()` to re-sync pagination/total.
+ *    * On error: restore the removed row.
+ *
+ * v0.7.0:
+ *  - Always refetch first page on modal open + immediate head check.
  */
 import {
   AfterViewInit,
@@ -76,13 +81,18 @@ export class RunsHistoryComponent implements OnInit, OnChanges, AfterViewInit, O
     if (this.open) this.resetAndLoad();
   }
 
-  ngOnChanges(_: SimpleChanges): void {
-    if (this.open) {
-      if (!this.items().length) this.resetAndLoad();
-      this.startPolling();
-    } else {
-      this.stopPolling();
-      this.disconnectIO();
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['open']) {
+      const nowOpen = !!changes['open'].currentValue;
+      const wasOpen = !!changes['open'].previousValue;
+
+      if (nowOpen && !wasOpen) {
+        this.resetAndLoad();
+        this.startPolling(true /* immediateHeadCheck */);
+      } else if (!nowOpen && wasOpen) {
+        this.stopPolling();
+        this.disconnectIO();
+      }
     }
   }
 
@@ -111,8 +121,8 @@ export class RunsHistoryComponent implements OnInit, OnChanges, AfterViewInit, O
     const q = this.search.trim().length ? this.search.trim() : null;
     this.runs.list(q, this.pageSize, this.offset).subscribe({
       next: (res) => {
-        this.total = res.total || 0;
-        this.items.set(res.items || []);
+        this.total = res.total ?? 0;
+        this.items.set(res.items ?? []);
         this.offset = this.items().length;
         this.hasMore.set(this.offset < this.total);
         this.loadingFirst.set(false);
@@ -136,11 +146,11 @@ export class RunsHistoryComponent implements OnInit, OnChanges, AfterViewInit, O
       next: (res) => {
         const current = this.items();
         const seen = new Set(current.map((i) => i.job_id));
-        const incoming = (res.items || []).filter((i) => !seen.has(i.job_id));
+        const incoming = (res.items ?? []).filter((i) => !seen.has(i.job_id));
         this.items.set([...current, ...incoming]);
 
         this.offset = this.items().length;
-        this.total = res.total || this.total;
+        this.total = res.total ?? this.total;
         this.hasMore.set(this.offset < this.total);
         this.loadingMore.set(false);
       },
@@ -151,8 +161,9 @@ export class RunsHistoryComponent implements OnInit, OnChanges, AfterViewInit, O
   }
 
   /** Poll the head (first page) to prepend new runs while the dialog is open. */
-  private startPolling() {
+  private startPolling(immediateHeadCheck = false) {
     this.stopPolling();
+    if (immediateHeadCheck) this.checkForNewHead();
     this.pollId = window.setInterval(() => this.checkForNewHead(), 4000);
   }
 
@@ -163,7 +174,7 @@ export class RunsHistoryComponent implements OnInit, OnChanges, AfterViewInit, O
     }
   }
 
-  /** Fetch first page; prepend any unseen runs (by job_id). */
+  /** Fetch first page; prepend any unseen runs and update statuses of existing ones. */
   private checkForNewHead() {
     if (!this.open || this.loadingFirst()) return;
 
@@ -171,77 +182,49 @@ export class RunsHistoryComponent implements OnInit, OnChanges, AfterViewInit, O
     this.runs.list(q, this.pageSize, 0).subscribe({
       next: (res) => {
         const current = this.items();
+        const firstPage = res.items ?? [];
+
         if (!current.length) {
-          // If list is empty (edge), just adopt the page
-          this.items.set(res.items || []);
+          this.items.set(firstPage);
           this.offset = this.items().length;
-          this.total = res.total || 0;
+          this.total = res.total ?? 0;
           this.hasMore.set(this.offset < this.total);
           return;
         }
 
-        const existingIds = new Set(current.map((i) => i.job_id));
-        const fresh = (res.items || []).filter((i) => !existingIds.has(i.job_id));
+        const byId = new Map(current.map((i) => [i.job_id, i]));
 
-        if (fresh.length) {
-          // Prepend fresh items, keeping overall order (fresh already newest first)
-          this.items.set([...fresh, ...current]);
-          // Bump counters
-          this.offset = this.items().length;
-          this.total = res.total || this.total;
-          this.hasMore.set(this.offset < this.total);
-
-          // Optional: keep scroll position stable if near top
-          const host = this.scrollHost?.nativeElement;
-          if (host && host.scrollTop < 40) {
-            // stay at top
+        // Update existing
+        for (const item of firstPage) {
+          const existing = byId.get(item.job_id);
+          if (existing) {
+            if (
+              existing.status !== item.status ||
+              existing.report_url !== item.report_url ||
+              existing.updated_at !== item.updated_at
+            ) {
+              byId.set(item.job_id, { ...existing, ...item });
+            }
           }
         }
+
+        // New at head
+        const existingIds = new Set(byId.keys());
+        const fresh = firstPage.filter((i) => !existingIds.has(i.job_id));
+
+        const updatedCurrent = Array.from(byId.values()).sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+
+        this.items.set([...fresh, ...updatedCurrent]);
+        this.offset = this.items().length;
+        this.total = res.total ?? this.total;
+        this.hasMore.set(this.offset < this.total);
       },
       error: () => {
-        // ignore transient errors
+        /* ignore transient errors */
       },
     });
-  }
-
-  /** IntersectionObserver setup to watch the sentinel within the scroll container. */
-  private setupIO() {
-    if (this.io) this.io.disconnect();
-    const root = this.scrollHost?.nativeElement || null;
-    if (!root) return;
-
-    this.io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            this.loadMore();
-          }
-        }
-      },
-      {
-        root,
-        rootMargin: '200px', // start loading a bit before reaching the end
-        threshold: 0.01,
-      }
-    );
-
-    this.observeSentinel();
-  }
-
-  private observeSentinel() {
-    if (!this.io) return;
-    const el = this.sentinel?.nativeElement;
-    if (el) {
-      this.io.unobserve(el); // idempotent
-      this.io.observe(el);
-    }
-  }
-
-  private disconnectIO() {
-    if (this.io) {
-      this.io.disconnect();
-      this.io = undefined;
-    }
   }
 
   /** Row actions */
@@ -249,20 +232,29 @@ export class RunsHistoryComponent implements OnInit, OnChanges, AfterViewInit, O
     this.loadDesign.emit(r.job_id);
   }
 
-  onDelete(r: RunItem) {
+  onDelete(r: RunItem, ev?: MouseEvent) {
+    // prevent row click selection when pressing the button
+    if (ev) ev.stopPropagation();
+
     const ok = window.confirm(`Delete run ${r.job_id}? This will also delete its design and artifacts.`);
     if (!ok) return;
-    // Optimistic UI: remove row immediately
-    this.items.set(this.items().filter((x) => x.job_id !== r.job_id));
+
+    // 1) Optimistic UI: remove from current list immediately
+    const before = this.items();
+    const removed = before.find((x) => x.job_id === r.job_id);
+    this.items.set(before.filter((x) => x.job_id !== r.job_id));
+
+    // 2) Call API
     this.runs.delete(r.job_id, true).subscribe({
       next: () => {
-        // adjust counts
-        this.total = Math.max(0, this.total - 1);
-        this.hasMore.set(this.offset < this.total);
+        // 3) Re-sync from server so totals/pagination are correct
+        this.resetAndLoad();
       },
       error: () => {
-        // If delete fails, refresh to resync
-        this.resetAndLoad();
+        // 4) On error, restore the removed row
+        if (removed) {
+          this.items.set([removed, ...this.items()]);
+        }
       },
     });
   }
@@ -273,5 +265,39 @@ export class RunsHistoryComponent implements OnInit, OnChanges, AfterViewInit, O
 
   trackByJob(_: number, item: RunItem) {
     return item.job_id;
+  }
+
+  /** IO setup */
+  private setupIO() {
+    if (this.io) this.io.disconnect();
+    const root = this.scrollHost?.nativeElement || null;
+    if (!root) return;
+
+    this.io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) this.loadMore();
+        }
+      },
+      { root, rootMargin: '200px', threshold: 0.01 }
+    );
+
+    this.observeSentinel();
+  }
+
+  private observeSentinel() {
+    if (!this.io) return;
+    const el = this.sentinel?.nativeElement;
+    if (el) {
+      this.io.unobserve(el);
+      this.io.observe(el);
+    }
+  }
+
+  private disconnectIO() {
+    if (this.io) {
+      this.io.disconnect();
+      this.io = undefined;
+    }
   }
 }

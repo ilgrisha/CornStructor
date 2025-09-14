@@ -1,11 +1,12 @@
 # File: backend/app/core/pipeline/py_runner.py
-# Version: v0.1.2
+# Version: v0.2.0
 """
 In-process CornStructor pipeline runner.
 
-v0.1.2:
-- After exporting GA progress, save its JSON payload into the Design (DB) so that
-  live reports can be generated on-the-fly without reading from the reports folder.
+v0.2.0:
+- Persist GA progress to DB (if available).
+- Persist a snapshot of globals/levels into Design.params_json to support
+  deterministic re-rendering after container restarts.
 """
 from __future__ import annotations
 
@@ -27,12 +28,11 @@ from backend.app.core.visualization.analysis_html_report import export_analysis_
 from backend.app.core.visualization.ga_progress_html_report import export_ga_progress_html
 from backend.app.core.visualization.cluster_html_report import export_all_levels
 from backend.app.core.visualization.tree_html_exporter import export_tree_to_html
-
 from backend.app.core.visualization.run_index_simple import write_run_index_simple
 
-# NEW: persist GA progress to DB
+# NEW: persist GA progress & config snapshots to DB
 from backend.app.db.session import SessionLocal
-from backend.app.services.design_store import save_ga_progress
+from backend.app.services.design_store import save_ga_progress, save_config_snapshot
 
 
 class _SSELogHandler(logging.Handler):
@@ -78,10 +78,25 @@ def execute_pipeline(
     fasta_path.write_text(f">seq\n{seq}\n", encoding="utf-8")
     emit_log and emit_log(f"Saved FASTA to {fasta_path}")
 
+    # Load configuration
     levels_cfg: dict[int, LevelConfig] = load_levels_config(levels_path)
     global_cfg: GlobalConfig = load_global_config(str(globals_path))
     emit_log and emit_log("Loaded levels/global configs")
 
+    # Persist snapshots of config for future re-rendering
+    try:
+        gl_text = Path(globals_path).read_text(encoding="utf-8")
+        lv_text = Path(levels_path).read_text(encoding="utf-8")
+        db = SessionLocal()
+        try:
+            save_config_snapshot(db, job_id=job_id, globals_json=gl_text, levels_json=lv_text)
+            emit_log and emit_log("Saved config snapshots to database")
+        finally:
+            db.close()
+    except Exception as ex:
+        emit_log and emit_log(f"WARN: failed to save config snapshots: {ex}")
+
+    # Build Tree
     assembler = HierarchicalAssembler(levels_cfg, global_cfg, logger=logger)
     root = assembler.build(full_seq=seq, root_id=job_id)
     emit_log and emit_log("Built construction tree")
