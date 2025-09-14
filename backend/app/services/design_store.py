@@ -1,6 +1,10 @@
 # File: backend/app/services/design_store.py
-# Version: v0.4.0
-"""Service-layer helpers for Design persistence and run linkage."""
+# Version: v0.4.1
+"""Service-layer helpers for Design persistence and run linkage.
+
+v0.4.1:
+- Clarify that `params_json` stores snapshots under keys 'globals' and 'levels'.
+"""
 from __future__ import annotations
 
 import json
@@ -27,7 +31,7 @@ def create_design_with_run(
     design = Design(
         sequence=sequence,
         sequence_len=len(sequence),
-        params_json=params_json,
+        params_json=params_json,  # may later be enriched with 'globals'/'levels' snapshots
     )
     run.design = design
 
@@ -73,11 +77,12 @@ def save_config_snapshot(
     """
     Merge snapshots of globals/levels into Design.params_json for deterministic
     re-rendering later.
-    Structure stored in params_json:
+
+    Stored structure:
         {
-          "globals": {...},
-          "levels": {...},
-          "analysisParams": <existing value if any or {} >
+          "globals": <dict | JSON>,
+          "levels": <dict | JSON>,
+          "analysisParams": <existing analysis params if any (dict/JSON)>
         }
     """
     run = db.execute(select(Run).where(Run.job_id == job_id)).scalar_one_or_none()
@@ -92,7 +97,7 @@ def save_config_snapshot(
         current = json.loads(design.params_json) if design.params_json else {}
     except Exception:
         current = {}
-    # keep previous analysis params if they existed
+
     analysis_params = current.get("analysisParams", current if isinstance(current, dict) else {})
 
     try:
