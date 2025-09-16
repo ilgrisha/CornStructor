@@ -7,6 +7,7 @@
     "max_children": 10,
     "overlap_min_size": 22,
     "overlap_max_size": 55,
+
     "overlap_tm_min": 77,
     "overlap_tm_max": 85,
     "overlap_gc_min": 40,
@@ -15,6 +16,7 @@
     "overlap_run_max": 5,
     "overlap_disallowed_motifs": [],
     "overlap_allowed_motifs": {},
+
     "max_gap_allowed": 10
-  }
+    }
 ]

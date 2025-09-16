@@ -1,18 +1,18 @@
 /* ============================================================================
  * Path: frontend/src/app/core/services/api.service.ts
- * Version: v2.3.0
+ * Version: v2.4.1
  * ============================================================================
  * - startDesign() posts to backend and streams logs via SSE
  * - Signals for logs + result links (supports absolute or relative URLs)
  * - Looks for a final RESULT pointing to /reports/{jobId}/index.html
+ * - NOTE: `params` type is `any` to allow { analysis, tree }
  * ==========================================================================*/
 import { Injectable, signal, WritableSignal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { AnalysisParams } from './analysis.service';
 
 export interface DesignStartRequest {
   sequence: string;
-  params: AnalysisParams;
+  params: any;
   toggles?: Record<string, boolean>;
 }
 
@@ -20,7 +20,6 @@ export interface DesignStartRequest {
 export class ApiService {
   private sse?: EventSource;
 
-  // UI signals
   readonly logLines: WritableSignal<string[]> = signal<string[]>([]);
   readonly resultLinks: WritableSignal<string[]> = signal<string[]>([]);
   readonly resultIndexLink: WritableSignal<string | null> = signal<string | null>(null);
@@ -32,6 +31,7 @@ export class ApiService {
     this.logLines.set([]);
     this.resultLinks.set([]);
     this.resultIndexLink.set(null);
+
     this.http.post<{ jobId: string }>('/api/design/start', req)
       .subscribe({
         next: (res) => this.attachSSE(res.jobId),
@@ -52,14 +52,11 @@ export class ApiService {
       const line = ev.data as string;
       this.logLines.update(a => [...a, line]);
 
-      // Capture RESULT links. Accept absolute (http/https) or relative (/reports/...)
       const m = /^RESULT:\s*(\S+)/.exec(line);
       if (m) {
         const url = m[1];
         this.resultLinks.update(arr => [...arr, url]);
-        if (url.endsWith('/index.html')) {
-          this.resultIndexLink.set(url);
-        }
+        if (url.endsWith('/index.html')) this.resultIndexLink.set(url);
       }
     };
     this.sse.onerror = () => {

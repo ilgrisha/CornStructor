@@ -12,14 +12,19 @@
     "hill_climb_junc": 2,
     "hill_climb_cands": 10,
     "allowed_motif_scale": 1.0,
+
     "enable_early_stop": true,
     "early_stop_multiplier": 3.0
   },
+
   "cpu_workers_fraction": 0.9,
+
   "max_total_adjustment_rounds": 2,
   "division_adjust_attempts_per_junction": 4,
   "division_adjust_step_bp": 5,
+
   "tm_method": "NN",
+
   "tm": {
     "Na": 0.0,
     "K": 50.0,

@@ -1,5 +1,5 @@
 # File: backend/app/api/v1/api.py
-# Version: v0.6.0
+# Version: v0.7.1
 """
 v1 API aggregator.
 
@@ -10,6 +10,7 @@ Routers included under /api:
 - runs
 - secondary_structure (ViennaRNA-backed stems analysis)
 - live (on-the-fly JSON/HTML helpers)
+- params (defaults for globals/levels)
 
 Additionally, we expose `public_router` that mounts the dynamic reports
 router at /reports/* (root, not under /api), so main.py doesn't need to
@@ -28,6 +29,7 @@ from . import live_reports as live_router
 
 # Import the dynamic reports router ONLY here (not from main.py)
 from . import reports_dynamic as reports_dynamic_router
+from . import params as params_router
 
 # All v1 JSON APIs live under /api via api_router
 api_router = APIRouter()
@@ -37,6 +39,7 @@ api_router.include_router(designs_router.router)
 api_router.include_router(runs_router.router)
 api_router.include_router(stems_router.router)
 api_router.include_router(live_router.router)
+api_router.include_router(params_router.router)
 
 # Public (root-level) router to expose /reports/* without prefix /api.
 # main.py will include this router at the app root.
