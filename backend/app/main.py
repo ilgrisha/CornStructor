@@ -1,53 +1,50 @@
 # File: backend/app/main.py
-# Version: v0.5.0
+# Version: v0.3.1
 """
-FastAPI application entrypoint (aggregator style).
+FastAPI app entry.
 
-Mounts:
-- /api/* via a single aggregated v1 router (see backend/app/api/v1/api.py)
-- /reports (static) -> serves OUTPUT_DIR for dev parity (Nginx serves this in prod)
-
-CORS enabled per settings.
-OpenAPI/Docs exposed at /api/openapi.json and /docs.
-
-Run (local):
-  uvicorn backend.app.main:app --reload --port 8000
+- Keeps all route assembly in backend/app/api/v1/api.py.
+- Mounts /api/* via `api_router`.
+- Mounts /reports/* at root via `public_router` (no direct import of reports_dynamic).
+- Optional SQLite auto-heal is guarded by SCHEMA_AUTOHEAL.
 """
 from __future__ import annotations
 
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
-from backend.app.core.config import settings
-from backend.app.api.v1.api import api_router as api_v1_router
-
-# DB init
+from backend.app.api.v1.api import api_router, public_router
 from backend.app.db.session import engine
-from backend.app.db.models import Base
+from backend.app.db.maintenance import ensure_schema_sqlite
 
-# Create tables at startup if they don't exist (simple bootstrap; Alembic recommended later)
-Base.metadata.create_all(bind=engine)
-
-# App metadata is sourced from settings to keep it consistent across services
-app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION)
+app = FastAPI(title="CornStructor API", openapi_url="/api/openapi.json", docs_url="/api/docs")
 
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=["*"],  # tighten in prod
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Single include line: mount all v1 routes under the configured API prefix
-# Example: if settings.API_PREFIX == "/api", routes become /api/health, /api/design, etc.
-app.include_router(api_v1_router, prefix=settings.API_PREFIX)
+# APIs under /api
+app.include_router(api_router, prefix="/api")
 
-# Dev/Parity: also serve reports directly from the backend (Nginx handles this in prod)
-app.mount(
-    "/reports",
-    StaticFiles(directory=str(settings.OUTPUT_DIR), html=True),
-    name="reports",
-)
+# Public dynamic reports at root /reports/*
+app.include_router(public_router)
+
+
+def _env_true(name: str, default: str = "false") -> bool:
+    val = os.getenv(name, default).strip().lower()
+    return val in ("1", "true", "yes")
+
+
+@app.on_event("startup")
+def _startup_autoheal() -> None:
+    # Only try auto-heal if explicitly enabled AND using SQLite
+    if engine.url.get_backend_name() == "sqlite" and _env_true("SCHEMA_AUTOHEAL", "false"):
+        actions = ensure_schema_sqlite(engine)
+        if actions:
+            print("[schema-autoheal]", ", ".join(actions))

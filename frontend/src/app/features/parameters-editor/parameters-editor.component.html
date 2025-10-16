@@ -1,0 +1,200 @@
+<!-- File: frontend/src/app/features/parameters-editor/parameters-editor.component.html -->
+<!-- Version: v0.5.1 -->
+<div class="modal" *ngIf="open">
+  <div class="dialog">
+    <div class="header">
+      <h2>Construction tree parameters</h2>
+      <button class="close" (click)="close.emit()" aria-label="Close">✕</button>
+    </div>
+
+    <div class="toolbar">
+      <div class="left">
+        <button class="btn" (click)="onReloadDefaults()">Reload defaults</button>
+      </div>
+      <div class="right">
+        <label class="import btn">
+          <input type="file" accept="application/json" (change)="onImportGlobals($event)"> Import Globals
+        </label>
+        <button class="btn" (click)="exportGlobals()">Export Globals</button>
+        <span class="sep"></span>
+        <label class="import btn">
+          <input type="file" accept="application/json" (change)="onImportLevels($event)"> Import Levels
+        </label>
+        <button class="btn" (click)="exportLevels()">Export Levels</button>
+      </div>
+    </div>
+
+    <!-- Scrollable content area -->
+    <div class="content">
+      <!-- Globals -->
+      <section class="panel globals">
+        <h3>Globals</h3>
+        <div class="panel-scroll">
+          <!-- Regular globals (skip 'ga' and 'tm'; handled below) -->
+          <div class="row" *ngFor="let kv of tp.globals() | keyvalue">
+            <ng-container *ngIf="kv.key !== 'ga' && kv.key !== 'tm'">
+              <div class="label">{{ kv.key }}</div>
+
+              <!-- Primitive editor -->
+              <input
+                *ngIf="isPrimitive(kv.value)"
+                class="field"
+                [type]="isNumeric(kv.value) ? 'number' : 'text'"
+                [ngModel]="kv.value"
+                (ngModelChange)="onGlobalChange(kv.key, $event)"
+              />
+
+              <!-- JSON editor for object/array (keys other than ga/tm) -->
+              <div class="json-wrap" *ngIf="isObjectLike(kv.value)">
+                <textarea
+                  class="json"
+                  [class.invalid]="globalJsonErrs[kv.key]"
+                  [ngModel]="toPrettyJson(kv.value)"
+                  (ngModelChange)="onGlobalJsonChange(kv.key, $event)"
+                ></textarea>
+                <div class="hint" *ngIf="globalJsonErrs[kv.key]">{{ globalJsonErrs[kv.key] }}</div>
+              </div>
+            </ng-container>
+          </div>
+
+          <!-- GA group: individual fields -->
+          <div class="group-card" *ngIf="tp.globals()?.ga">
+            <div class="group-header">
+              <div class="group-title">ga</div>
+            </div>
+            <div class="group-body">
+              <div class="row" *ngFor="let k of gaKeys()">
+                <div class="label">{{ k }}</div>
+
+                <!-- Primitive -->
+                <input
+                  *ngIf="isPrimitive(gaValue(k))"
+                  class="field"
+                  [type]="isNumeric(gaValue(k)) ? 'number' : 'text'"
+                  [ngModel]="gaValue(k)"
+                  (ngModelChange)="onGlobalNestedChange('ga', k, $event)"
+                />
+
+                <!-- Object/Array fallback (rare) -->
+                <div class="json-wrap" *ngIf="isObjectLike(gaValue(k))">
+                  <textarea
+                    class="json"
+                    [ngModel]="toPrettyJson(gaValue(k))"
+                    (ngModelChange)="onGlobalNestedChange('ga', k, $event)"
+                  ></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TM group: expandable box with individual fields -->
+          <div class="group-card" *ngIf="tp.globals()?.tm">
+            <button class="group-header toggle" (click)="tmOpen.set(!tmOpen())" type="button" [attr.aria-expanded]="tmOpen()">
+              <div class="chev" [class.open]="tmOpen()"></div>
+              <div class="group-title">tm</div>
+            </button>
+
+            <div class="group-body" *ngIf="tmOpen()">
+              <div class="row" *ngFor="let k of tmKeys()">
+                <div class="label">{{ k }}</div>
+
+                <!-- Typed editor using proper ngSwitch -->
+                <ng-container [ngSwitch]="true">
+                  <!-- number -->
+                  <input
+                    *ngSwitchCase="isNumeric(tmValue(k))"
+                    class="field"
+                    type="number"
+                    [ngModel]="tmValue(k)"
+                    (ngModelChange)="onGlobalNestedChange('tm', k, $event)"
+                  />
+
+                  <!-- boolean (use helper; no 'typeof' in template) -->
+                  <label class="switch" *ngSwitchCase="isBoolean(tmValue(k))">
+                    <input
+                      type="checkbox"
+                      [checked]="tmValue(k) === true"
+                      (change)="onGlobalNestedToggle('tm', k, $any($event.target).checked)"
+                    />
+                    <span class="slider"></span>
+                  </label>
+
+                  <!-- text (default) -->
+                  <input
+                    *ngSwitchDefault
+                    class="field"
+                    type="text"
+                    [ngModel]="tmValue(k)"
+                    (ngModelChange)="onGlobalNestedChange('tm', k, $event)"
+                  />
+                </ng-container>
+
+                <!-- Object/Array fallback (rare) -->
+                <div class="json-wrap" *ngIf="isObjectLike(tmValue(k))">
+                  <textarea
+                    class="json"
+                    [ngModel]="toPrettyJson(tmValue(k))"
+                    (ngModelChange)="onGlobalNestedChange('tm', k, $event)"
+                  ></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Levels -->
+      <section class="panel levels">
+        <h3>Levels</h3>
+        <div class="levels-body">
+          <aside class="levels-list">
+            <button class="btn subtle add" (click)="onAddLevel()">+ Add level</button>
+
+            <button
+              class="level-item"
+              *ngFor="let L of tp.levels(); let i = index"
+              [class.active]="i === sel()"
+              (click)="onSelectLevel(i)"
+              type="button"
+            >
+              <span>Level {{ i }}</span>
+              <span class="row-actions">
+                <button class="btn tiny" (click)="onInsertLevel(i, $event)" type="button">Insert</button>
+                <button class="btn tiny danger" (click)="onDeleteLevel(i, $event)" type="button">Delete</button>
+              </span>
+            </button>
+          </aside>
+
+          <div class="level-editor" *ngIf="tp.levels().length">
+            <div class="editor-header">Level {{ sel() }}</div>
+            <div class="panel-scroll">
+              <div class="row" *ngFor="let kv of tp.levels()[sel()] | keyvalue">
+                <div class="label">{{ kv.key }}</div>
+
+                <!-- Primitive -->
+                <input
+                  *ngIf="isPrimitive(kv.value)"
+                  class="field"
+                  [type]="isNumeric(kv.value) ? 'number' : 'text'"
+                  [ngModel]="kv.value"
+                  (ngModelChange)="onLevelFieldChange(sel(), kv.key, $event)"
+                />
+
+                <!-- JSON -->
+                <div class="json-wrap" *ngIf="isObjectLike(kv.value)">
+                  <textarea
+                    class="json"
+                    [class.invalid]="levelJsonErrs[sel()]?.[kv.key]"
+                    [ngModel]="toPrettyJson(kv.value)"
+                    (ngModelChange)="onLevelJsonChange(sel(), kv.key, $event)"
+                  ></textarea>
+                  <div class="hint" *ngIf="levelJsonErrs[sel()]?.[kv.key]">{{ levelJsonErrs[sel()]?.[kv.key] }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div> <!-- levels-body -->
+      </section>
+    </div> <!-- content -->
+  </div>
+</div>

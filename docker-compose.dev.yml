@@ -1,5 +1,5 @@
 # File: docker-compose.dev.yml
-# Version: v0.6.0
+# Version: v0.7.0
 services:
   backend:
     build:
@@ -9,6 +9,9 @@ services:
       - CORS_ORIGINS=*
       - OUTPUT_DIR=/data/out
       - PYTHONPATH=/app
+      # Enable dev-only SQLite auto-heal at app startup.
+      # Accepted truthy values: 1 / true / yes (case-insensitive).
+      - SCHEMA_AUTOHEAL=true
     volumes:
       - reports:/data/out
       - ./:/app:rw

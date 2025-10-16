@@ -1,34 +1,51 @@
 // File: frontend/src/app/core/services/runs.service.ts
-// Version: v0.1.0
+// Version: v0.4.0
 /**
- * RunsService — talks to /api/runs for history.
+ * RunsService: list and manage CornStructor runs.
+ *
+ * v0.4.0:
+ *  - Add cache-busting param `t` to avoid any proxy/browser caching on /api/runs.
+ *  - No API shape changes.
  */
-import { Injectable, signal, WritableSignal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
+import { Observable } from 'rxjs';
 
 export interface RunItem {
   job_id: string;
-  status: 'running' | 'completed' | 'failed';
+  status: 'running' | 'completed' | 'failed' | string;
+  sequence_len?: number | null;
+  report_url?: string | null;
   created_at: string;
   updated_at: string;
-  report_url?: string | null;
-  exit_code?: number | null;
-  sequence_len?: number | null;
-  note?: string | null;
 }
 
 export interface RunListResponse {
-  total: number;
   items: RunItem[];
+  total: number;
 }
 
 @Injectable({ providedIn: 'root' })
 export class RunsService {
+  private api = environment.apiBase || '/api';
+
   constructor(private http: HttpClient) {}
 
-  list(q: string | null = null, limit = 50, offset = 0) {
-    const params: any = { limit, offset };
-    if (q) params.q = q;
-    return this.http.get<RunListResponse>('/api/runs', { params });
+  /** List runs with pagination; use `offset` to fetch the next page (infinite scroll). */
+  list(q: string | null, limit = 50, offset = 0): Observable<RunListResponse> {
+    let params = new HttpParams()
+      .set('limit', limit)
+      .set('offset', offset)
+      // cache buster
+      .set('t', String(Date.now()));
+    if (q) params = params.set('q', q);
+    return this.http.get<RunListResponse>(`${this.api}/runs`, { params });
+  }
+
+  /** Delete a run and its linked design; optionally keep artifacts by passing deleteReports=false. */
+  delete(jobId: string, deleteReports = true): Observable<void> {
+    const params = new HttpParams().set('delete_reports', String(deleteReports));
+    return this.http.delete<void>(`${this.api}/runs/${jobId}`, { params });
   }
 }
