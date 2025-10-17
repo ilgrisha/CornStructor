@@ -1,5 +1,5 @@
 /* File: frontend/src/app/features/parameters-editor/parameters-editor.component.css */
-/* Version: v0.4.0 */
+/* Version: v0.4.1 */
 
 /* ---------- Modal & shell (unchanged basics) ---------- */
 .modal {
@@ -55,7 +55,6 @@
 /* ---------- Panels layout: give Levels more width ---------- */
 .content {
   display: grid;
-  /* Previously 1fr 1fr; now bias towards Levels panel */
   grid-template-columns: 2fr 3fr; /* Globals : Levels = 40% : 60% */
   gap: 14px;
   padding: 14px 18px 18px;
@@ -142,8 +141,7 @@
 /* ---------- Levels column layout tweaks ---------- */
 .levels-body {
   display: grid;
-  /* Give the editor side more room by nudging the sidebar */
-  grid-template-columns: 260px 1fr; /* was 220px 1fr */
+  grid-template-columns: 260px 1fr;
   gap: 12px;
 }
 .levels-list {
@@ -160,23 +158,18 @@
 .editor-header { padding: 6px 8px; font-weight: 600; border-bottom: 1px solid #f3f3f3; }
 
 /* ---------- Make Globals inputs shorter, Levels inputs wider ---------- */
-
-/* Cap Globals input/JSON widths so they don't run too long */
 .panel.globals .row {
-  /* Fix label column and *cap* the editor column */
   grid-template-columns: 220px minmax(220px, 520px);
 }
 .panel.globals .field { max-width: 520px; }
 .panel.globals .json-wrap .json { max-width: 620px; }
 
-/* Let Levels grow naturally with the wider panel */
 .panel.levels .row {
-  /* Slightly smaller label, give more space to the field column */
   grid-template-columns: 200px 1fr;
 }
 .panel.levels .field,
 .panel.levels .json-wrap .json {
-  max-width: none; /* allow full stretch */
+  max-width: none;
 }
 
 /* ---------- Toggle switch ---------- */

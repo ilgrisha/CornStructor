@@ -1,8 +1,11 @@
 # File: backend/app/core/export/fasta_exporter.py
-# Version: v0.2.0
+# Version: v0.2.1
 
 """
 FASTA export utilities for FragmentNode trees.
+
+v0.2.1
+- Honor node.strand: if '-', export reverse complement; if '+', export as-is.
 """
 
 from pathlib import Path
@@ -22,6 +25,18 @@ def _traverse(node: FragmentNode) -> List[FragmentNode]:
     return out
 
 
+def _oriented_seq(n: FragmentNode) -> str:
+    """
+    Return the sequence oriented for export:
+    - '+' strand: raw sequence
+    - '-' strand: reverse complement
+    """
+    raw = getattr(n, "seq", "") or ""
+    if getattr(n, "strand", "+") == "-":
+        return str(Seq(raw).reverse_complement())
+    return raw
+
+
 def export_fragments_to_fasta(root: FragmentNode,
                               fasta_path: Path,
                               root_id: str) -> None:
@@ -32,7 +47,8 @@ def export_fragments_to_fasta(root: FragmentNode,
     records: List[SeqRecord] = []
     for n in _traverse(root):
         rid = f"{n.fragment_id}_{n.start}_{n.end}"
-        records.append(SeqRecord(Seq(n.seq), id=rid, description=""))
+        seq_out = _oriented_seq(n)
+        records.append(SeqRecord(Seq(seq_out), id=rid, description=""))
     SeqIO.write(records, fasta_path, "fasta")
 
 
@@ -47,5 +63,6 @@ def export_oligos_to_fasta(root: FragmentNode,
     for n in _traverse(root):
         if n.is_oligo:
             rid = f"{n.fragment_id}_{n.start}_{n.end}"
-            records.append(SeqRecord(Seq(n.seq), id=rid, description=""))
+            seq_out = _oriented_seq(n)
+            records.append(SeqRecord(Seq(seq_out), id=rid, description=""))
     SeqIO.write(records, fasta_path, "fasta")

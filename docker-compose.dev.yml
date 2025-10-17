@@ -12,6 +12,10 @@ services:
       # Enable dev-only SQLite auto-heal at app startup.
       # Accepted truthy values: 1 / true / yes (case-insensitive).
       - SCHEMA_AUTOHEAL=true
+      # Enable detailed error tracebacks in the console.
+      - PYTHONFAULTHANDLER=1
+      - UVICORN_LOG_LEVEL=debug
+      - LOGLEVEL=DEBUG
     volumes:
       - reports:/data/out
       - ./:/app:rw

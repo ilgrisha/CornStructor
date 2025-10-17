@@ -1,11 +1,16 @@
 // File: frontend/src/app/features/parameters-editor/parameters-editor.component.ts
-// Version: v0.5.1
+// Version: v0.6.0
 /**
  * ParametersEditorComponent (standalone modal)
  *
- * v0.5.1
- * - Removed `typeof` usage from template (not supported pre-Angular 19).
- * - Added `isBoolean()` helper and switched boolean branch to use it.
+ * v0.6.0
+ * - Boolean toggle support in Levels and GA groups (not only TM).
+ * - Alias support for levels keys:
+ *     overlap_tm_min  <-> overlap_min_tm
+ *     overlap_tm_max  <-> overlap_max_tm
+ *   On import/edit/export, we mirror both aliases to minimize backend changes.
+ * - Export now serializes levels with mirrored aliases to maximize compatibility.
+ * - Safer number parsing and nullish handling.
  */
 import { Component, Input, Output, EventEmitter, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -14,6 +19,7 @@ import { TreeParamsService } from '../../core/services/tree-params.service';
 
 type ErrMap = Record<string, string | null>;
 type JsonObject = { [k: string]: any };
+type JsonArray = any[];
 
 @Component({
   selector: 'app-parameters-editor',
@@ -44,7 +50,8 @@ export class ParametersEditorComponent {
     return val === null || t === 'string' || t === 'number' || t === 'boolean';
   }
   isNumeric(val: any): boolean {
-    return typeof val === 'number' || (typeof val === 'string' && /^-?\d+(\.\d+)?$/.test(val));
+    // allow numbers and numeric strings
+    return typeof val === 'number' || (typeof val === 'string' && /^-?\d+(\.\d+)?$/.test(val.trim()));
   }
   isBoolean(val: any): boolean {
     return typeof val === 'boolean';
@@ -52,16 +59,44 @@ export class ParametersEditorComponent {
   isObjectLike(val: any): boolean {
     return val !== null && typeof val === 'object' && !Array.isArray(val);
   }
+  isArray(val: any): boolean {
+    return Array.isArray(val);
+  }
   toPrettyJson(val: any): string {
     try { return JSON.stringify(val, null, 2); } catch { return String(val); }
   }
   /** Basic clamping for percentages/ratios; otherwise just numeric parsing. */
   clampNumber(key: string, raw: any): any {
     if (raw === '' || raw === null || raw === undefined) return raw;
-    const num = typeof raw === 'number' ? raw : parseFloat(raw);
+    const num = typeof raw === 'number' ? raw : parseFloat(String(raw));
     if (Number.isNaN(num)) return raw;
     if (/pct|percent|rate|ratio/i.test(key)) return Math.max(0, Math.min(100, num));
     return num;
+  }
+
+  // ---------- Alias helpers (Levels) ----------
+  /** Mirror known alias pairs into the same object without overwriting explicit values. */
+  private mirrorLevelAliases(row: JsonObject): JsonObject {
+    const out = { ...row };
+
+    // tm min
+    const vMinA = out['overlap_tm_min'];
+    const vMinB = out['overlap_min_tm'];
+    if (vMinA !== undefined && vMinB === undefined) out['overlap_min_tm'] = vMinA;
+    if (vMinB !== undefined && vMinA === undefined) out['overlap_tm_min'] = vMinB;
+
+    // tm max
+    const vMaxA = out['overlap_tm_max'];
+    const vMaxB = out['overlap_max_tm'];
+    if (vMaxA !== undefined && vMaxB === undefined) out['overlap_max_tm'] = vMaxA;
+    if (vMaxB !== undefined && vMaxA === undefined) out['overlap_tm_max'] = vMaxB;
+
+    return out;
+  }
+
+  /** Normalize an entire levels array (apply alias mirroring to every row). */
+  private normalizeLevelsArray(arr: JsonArray): JsonArray {
+    return (arr || []).map((row: any) => this.mirrorLevelAliases(row ?? {}));
   }
 
   // ---------- Import / Export ----------
@@ -83,7 +118,16 @@ export class ParametersEditorComponent {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      this.tp.importLevels(String(reader.result));
+      try {
+        const raw = JSON.parse(String(reader.result));
+        const arr = Array.isArray(raw) ? raw : [];
+        const normalized = this.normalizeLevelsArray(arr);
+        // push into TP as JSON string to reuse its import logic if needed, else set directly
+        this.tp.importLevels(JSON.stringify(normalized));
+      } catch {
+        // if parsing fails, fall back to the existing importer (it may handle validation)
+        this.tp.importLevels(String(reader.result));
+      }
       this.levelJsonErrs = {};
       this.sel.set(0);
     };
@@ -100,12 +144,22 @@ export class ParametersEditorComponent {
     a.click();
     URL.revokeObjectURL(url);
   }
-  exportGlobals() { this.download('globals.json', this.tp.exportGlobals()); }
-  exportLevels()  { this.download('levels.json',  this.tp.exportLevels()); }
+
+  exportGlobals() {
+    // pass-through; globals format already matches your new schema
+    this.download('globals.json', this.tp.exportGlobals());
+  }
+
+  exportLevels()  {
+    // Export with alias mirroring to satisfy both new and old keys.
+    const levels = this.normalizeLevelsArray(this.tp.levels());
+    this.download('levels.json', JSON.stringify(levels, null, 2));
+  }
 
   // ---------- Updates: Globals ----------
   onGlobalChange(key: string, value: any) {
-    const v = this.clampNumber(key, value);
+    // render booleans as toggles if you add them later; for now numbers/strings
+    const v = this.isNumeric(value) ? this.clampNumber(key, value) : value;
     const curr = this.tp.globals();
     this.tp.globals.set({ ...curr, [key]: v });
   }
@@ -135,7 +189,7 @@ export class ParametersEditorComponent {
     this.ensureGroup(group);
     const g = { ...this.tp.globals() };
     const groupObj = { ...(g[group] as JsonObject) };
-    const v = this.clampNumber(field, value);
+    const v = this.isNumeric(value) ? this.clampNumber(field, value) : value;
     groupObj[field] = v;
     g[group] = groupObj;
     this.tp.globals.set(g);
@@ -152,12 +206,26 @@ export class ParametersEditorComponent {
   }
 
   // ---------- Updates: Levels ----------
-  onLevelFieldChange(idx: number, key: string, value: any) {
-    const v = this.clampNumber(key, value);
+  private setLevelRow(idx: number, row: JsonObject) {
     const arr = [...this.tp.levels()];
-    const row = { ...arr[idx], [key]: v };
     arr[idx] = row;
     this.tp.levels.set(arr);
+  }
+
+  onLevelFieldChange(idx: number, key: string, value: any) {
+    // Update one primitive field, then mirror aliases and save.
+    const current = { ...(this.tp.levels()[idx] ?? {}) };
+
+    let v: any = value;
+    if (this.isBoolean(current[key])) {
+      v = !!value; // trust the toggle
+    } else if (this.isNumeric(value)) {
+      v = this.clampNumber(key, value);
+    }
+
+    const updated = { ...current, [key]: v };
+    const mirrored = this.mirrorLevelAliases(updated);
+    this.setLevelRow(idx, mirrored);
   }
 
   onLevelJsonChange(idx: number, key: string, text: string) {
@@ -165,10 +233,10 @@ export class ParametersEditorComponent {
     try {
       const parsed = JSON.parse(text);
       this.levelJsonErrs[idx][key] = null;
-      const arr = [...this.tp.levels()];
-      const row = { ...arr[idx], [key]: parsed };
-      arr[idx] = row;
-      this.tp.levels.set(arr);
+      const current = { ...(this.tp.levels()[idx] ?? {}) };
+      const updated = { ...current, [key]: parsed };
+      const mirrored = this.mirrorLevelAliases(updated);
+      this.setLevelRow(idx, mirrored);
     } catch {
       this.levelJsonErrs[idx][key] = 'Invalid JSON';
     }
@@ -192,6 +260,9 @@ export class ParametersEditorComponent {
   onSelectLevel(i: number) { this.sel.set(i); }
   onReloadDefaults() {
     this.tp.loadDefaults();
+    // Alias-mirror current levels after reload (in case defaults use either naming)
+    const arr = this.normalizeLevelsArray(this.tp.levels());
+    this.tp.levels.set(arr);
     this.globalJsonErrs = {};
     this.levelJsonErrs = {};
     this.sel.set(0);
