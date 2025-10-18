@@ -1,72 +1,123 @@
 # File: backend/app/core/export/csv_exporter.py
-# Version: v0.1.1
-
+# Version: v0.2.0
 """
-Export leaf fragment (oligo) sequences to CSV.
-
-v0.1.1
-- Honor node.strand: if '-', export reverse complement; if '+', export as-is.
-
-Fields:
-- sequence_id
-- sequence
-- sequence_length
-
-Behavior:
-- Traverses the FragmentNode tree and collects *leaf* nodes. A node is
-  considered a leaf if `is_oligo` is True OR it has no children.
-- Writes a CSV with the three fields above in left-to-right order.
+CSV exporters for fragments and oligos with strand-aware sequences and overlap Tm.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import List, Tuple
 import csv
-from Bio.Seq import Seq
+from pathlib import Path
+from typing import Dict, Iterable, List, Tuple
 
-from backend.app.core.models.fragment_node import FragmentNode
+from backend.app.core.assembly.fitness_utils import compute_tm
 
-
-def _oriented_seq(n: FragmentNode) -> str:
-    """
-    Return the sequence oriented for export:
-    - '+' strand: raw sequence
-    - '-' strand: reverse complement
-    """
-    raw = getattr(n, "seq", "") or ""
-    if getattr(n, "strand", "+") == "-":
-        return str(Seq(raw).reverse_complement())
-    return raw
+try:
+    from backend.app.core.models.fragment_node import FragmentNode  # type: ignore
+except Exception:
+    FragmentNode = object  # type: ignore
 
 
-def _collect_leaf_sequences(node: FragmentNode) -> List[Tuple[str, str, int]]:
-    out: List[Tuple[str, str, int]] = []
-    children = getattr(node, "children", None) or []
-    if getattr(node, "is_oligo", False) or len(children) == 0:
-        seq_out = _oriented_seq(node)
-        sid = getattr(node, "fragment_id", "") or ""
-        out.append((sid, seq_out, len(seq_out)))
-        return out
-    for ch in children:
-        out.extend(_collect_leaf_sequences(ch))
-    return out
+_RC_MAP = str.maketrans("ACGTacgt", "TGCAtgca")
 
 
-def export_fragments_to_csv(root: FragmentNode, out_path: Path, root_id: str) -> Path:
-    """
-    Write all leaf sequences to CSV at `out_path`.
-    Returns the written path.
-    """
-    rows = _collect_leaf_sequences(root)
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+def _rc(seq: str) -> str:
+    return (seq or "").translate(_RC_MAP)[::-1]
 
-    # Write CSV
-    with out_path.open("w", encoding="utf-8", newline="") as fh:
-        w = csv.writer(fh)
-        w.writerow(["sequence_id", "sequence", "sequence_length"])
-        for sid, seq, L in rows:
-            w.writerow([sid, seq, L])
 
-    return out_path
+def _oriented(seq: str, strand: str) -> str:
+    return _rc(seq) if (strand or "+") == "-" else seq
+
+
+def _walk(root: FragmentNode) -> Iterable[FragmentNode]:
+    stack = [root]
+    while stack:
+        n = stack.pop()
+        yield n
+        if getattr(n, "children", None):
+            for c in reversed(n.children):
+                stack.append(c)
+
+
+def _row(
+    n: FragmentNode,
+    root_id: str,
+    *,
+    tm_method: str,
+    tm_params: dict,
+) -> Dict[str, str]:
+    strand = str(getattr(n, "strand", "+") or "+")
+    seq_raw = str(getattr(n, "seq", "") or "")
+    ovp_raw = str(getattr(n, "overlap_prev", "") or "")
+    ovn_raw = str(getattr(n, "overlap_next", "") or "")
+
+    seq = _oriented(seq_raw, strand)
+    ovp = _oriented(ovp_raw, strand) if ovp_raw else ""
+    ovn = _oriented(ovn_raw, strand) if ovn_raw else ""
+
+    try:
+        ovp_tm = f"{compute_tm(ovp, method=tm_method, **tm_params):.3f}" if ovp else ""
+    except Exception:
+        ovp_tm = ""
+    try:
+        ovn_tm = f"{compute_tm(ovn, method=tm_method, **tm_params):.3f}" if ovn else ""
+    except Exception:
+        ovn_tm = ""
+
+    s = int(getattr(n, "start", 0) or 0)
+    e = int(getattr(n, "end", 0) or 0)
+    L = max(0, e - s)
+
+    return {
+        "root_id": str(root_id),
+        "fragment_id": str(getattr(n, "fragment_id", "")),
+        "level": str(getattr(n, "level", "")),
+        "is_oligo": "1" if bool(getattr(n, "is_oligo", False)) else "0",
+        "strand": strand,
+        "start": str(s),
+        "end": str(e),
+        "length": str(L),
+        "overlap_prev": ovp,
+        "overlap_prev_tm": ovp_tm,
+        "overlap_next": ovn,
+        "overlap_next_tm": ovn_tm,
+        "sequence": seq,
+    }
+
+
+def export_csvs(
+    root: FragmentNode,
+    outdir: Path,
+    *,
+    root_id: str,
+    tm_method: str,
+    tm_params: dict,
+) -> Tuple[Path, Path]:
+    """Write fragments.csv (all nodes) and oligos.csv (leaf nodes) with oriented sequences + Tm columns."""
+    all_rows: List[Dict[str, str]] = []
+    oligo_rows: List[Dict[str, str]] = []
+
+    for n in _walk(root):
+        row = _row(n, root_id, tm_method=tm_method, tm_params=tm_params)
+        all_rows.append(row)
+        if bool(getattr(n, "is_oligo", False)):
+            oligo_rows.append(row)
+
+    frag_csv = outdir / "fragments.csv"
+    oligo_csv = outdir / "oligos.csv"
+
+    if all_rows:
+        headers = list(all_rows[0].keys())
+        with frag_csv.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.DictWriter(fh, fieldnames=headers)
+            w.writeheader()
+            w.writerows(all_rows)
+
+    if oligo_rows:
+        headers = list(oligo_rows[0].keys())
+        with oligo_csv.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.DictWriter(fh, fieldnames=headers)
+            w.writeheader()
+            w.writerows(oligo_rows)
+
+    return frag_csv, oligo_csv

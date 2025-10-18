@@ -1,12 +1,12 @@
 # File: backend/app/core/reporting/on_the_fly.py
-# Version: v1.0.1
+# Version: v1.5.0
 """
-On-the-fly report rendering helpers.
+On-the-fly report rendering helpers (simplified).
 
-v1.0.1:
-- When snapshots are missing, still write 'levels.snapshot.json' and
-  'globals.snapshot.json' into the temp folder from current settings so that
-  links to those files work seamlessly.
+v1.5.0
+- Write JSON artifacts in friendly format (indent=2, sorted keys):
+    globals.json, levels.json, tree.json, analysis.json, ga_progress.json
+- Delegate CSV/FASTA/GenBank to core/export modules.
 """
 from __future__ import annotations
 
@@ -25,7 +25,13 @@ from backend.app.core.assembly.hierarchical_assembler import HierarchicalAssembl
 from backend.app.core.export.json_exporter import export_tree_to_json
 from backend.app.core.export.analysis_exporter import analyze_tree_to_json
 from backend.app.core.export.ga_progress_exporter import export_ga_progress_json
-from backend.app.core.export.fasta_exporter import export_fragments_to_fasta
+
+from backend.app.core.export.fasta_oriented_exporter import (
+    export_fragments_fasta_oriented,
+    export_oligos_fasta,
+)
+from backend.app.core.export.csv_exporter import export_csvs
+from backend.app.core.export.genbank_exporter import export_genbank_from_tree
 
 from backend.app.core.visualization.cluster_html_report import export_all_levels
 from backend.app.core.visualization.ga_progress_html_report import export_ga_progress_html
@@ -71,15 +77,26 @@ def _lru_put(job_id: str, entry: RenderEntry) -> None:
             pass
 
 
-def _write_config_snapshots(params_json: Optional[str], tmpdir: Path) -> tuple[Path, Path]:
+def _pretty_write(path: Path, data) -> None:
+    """Write JSON with indent=2, sorted keys."""
+    path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _read_json(path: Path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _write_configs(params_json: Optional[str], tmpdir: Path) -> tuple[Path, Path]:
     """
-    From Design.params_json, extract 'globals' and 'levels' snapshots if present
-    and write them to tmpdir. Returns (levels_path, globals_path).
-    If snapshots are missing, *also write* snapshot files based on current
-    settings, so that /reports/{job}/levels.snapshot.json works too.
+    Persist ONLY levels.json and globals.json into tmpdir.
+    Prefer snapshots embedded in Design.params_json; otherwise read from disk.
+    Always pretty-print.
     """
-    gl_path = tmpdir / "globals.snapshot.json"
-    lv_path = tmpdir / "levels.snapshot.json"
+    gl_path = tmpdir / "globals.json"
+    lv_path = tmpdir / "levels.json"
 
     try:
         data = json.loads(params_json) if params_json else {}
@@ -89,58 +106,76 @@ def _write_config_snapshots(params_json: Optional[str], tmpdir: Path) -> tuple[P
     gl = data.get("globals")
     lv = data.get("levels")
 
-    if gl is not None and lv is not None:
-        gl_path.write_text(json.dumps(gl), encoding="utf-8")
-        lv_path.write_text(json.dumps(lv), encoding="utf-8")
-        return lv_path, gl_path
+    if gl is None:
+        try:
+            gl = json.loads(Path(settings.GLOBALS_PATH).read_text(encoding="utf-8"))
+        except Exception:
+            gl = {}
+    if lv is None:
+        try:
+            lv = json.loads(Path(settings.LEVELS_PATH).read_text(encoding="utf-8"))
+        except Exception:
+            lv = {}
 
-    # Fallback to current config files on disk, but still emit snapshot files
-    try:
-        current_gl = json.loads(Path(settings.GLOBALS_PATH).read_text(encoding="utf-8"))
-    except Exception:
-        current_gl = {}
-    try:
-        current_lv = json.loads(Path(settings.LEVELS_PATH).read_text(encoding="utf-8"))
-    except Exception:
-        current_lv = {}
-
-    gl_path.write_text(json.dumps(current_gl), encoding="utf-8")
-    lv_path.write_text(json.dumps(current_lv), encoding="utf-8")
-
+    _pretty_write(gl_path, gl)
+    _pretty_write(lv_path, lv)
     return lv_path, gl_path
 
 
 def _reconstruct_and_export(design: Design, outdir: Path, job_id: str) -> None:
+    # Input FASTA
     (outdir / "input.fasta").write_text(f">seq\n{design.sequence}\n", encoding="utf-8")
 
-    lv_path, gl_path = _write_config_snapshots(design.params_json, outdir)
+    # Configs
+    lv_path, gl_path = _write_configs(design.params_json, outdir)
 
     levels_cfg: Dict[int, LevelConfig] = load_levels_config(lv_path)
     global_cfg: GlobalConfig = load_global_config(str(gl_path))
     assembler = HierarchicalAssembler(levels_cfg, global_cfg)
     root = assembler.build(full_seq=design.sequence, root_id=job_id)
 
-    export_tree_to_json(root, outdir / "tree.json", root_id=job_id)
+    # JSON & HTML reports
+    tree_json = export_tree_to_json(root, outdir / "tree.json", root_id=job_id) or _read_json(outdir / "tree.json")
+    if tree_json is not None:
+        _pretty_write(outdir / "tree.json", tree_json)
+
     clusters_dir = outdir / "clusters"
     export_all_levels(root, clusters_dir, levels_cfg=levels_cfg, global_cfg=global_cfg)
 
-    analysis_json = analyze_tree_to_json(root, outdir / "analysis.json", root_id=job_id)
-    export_analysis_html(analysis_json, outdir / "analysis.html")
+    analysis_json = analyze_tree_to_json(root, outdir / "analysis.json", root_id=job_id) or _read_json(outdir / "analysis.json")
+    if analysis_json is not None:
+        _pretty_write(outdir / "analysis.json", analysis_json)
+    export_analysis_html(analysis_json or {}, outdir / "analysis.html")
 
     export_tree_to_html(root, outdir / "tree.html", root_id=job_id)
-    export_fragments_to_fasta(root, outdir / "fragments.fasta", root_id=job_id)
 
+    # FASTA exports (strand-aware)
+    export_fragments_fasta_oriented(root, outdir / "fragments.fasta", root_id=job_id)
+    export_oligos_fasta(root, outdir / "oligos.fasta", root_id=job_id)
+
+    # CSV exports (strand-aware + overlap Tm)
+    export_csvs(
+        root,
+        outdir,
+        root_id=job_id,
+        tm_method=global_cfg.tm_method,
+        tm_params=global_cfg.tm,
+    )
+
+    # GenBank export (oligos→oligos, fragments→synthons)
+    export_genbank_from_tree(root, outdir / "assembly.gb", record_id=job_id, definition="CornStructor assembly.")
+
+    # GA progress artifacts
     if design.ga_progress_json:
-        (outdir / "ga_progress.json").write_text(design.ga_progress_json, encoding="utf-8")
-        try:
-            data = json.loads(design.ga_progress_json)
-        except Exception:
-            data = {}
-        export_ga_progress_html(data, outdir / "ga_progress.html")
+        _pretty_write(outdir / "ga_progress.json", json.loads(design.ga_progress_json))
+        export_ga_progress_html(json.loads(design.ga_progress_json), outdir / "ga_progress.html")
     else:
-        ga_json = export_ga_progress_json(root, outdir / "ga_progress.json", root_id=job_id)
-        export_ga_progress_html(ga_json, outdir / "ga_progress.html")
+        ga_json = export_ga_progress_json(root, outdir / "ga_progress.json", root_id=job_id) or _read_json(outdir / "ga_progress.json")
+        if ga_json is not None:
+            _pretty_write(outdir / "ga_progress.json", ga_json)
+        export_ga_progress_html(ga_json or {}, outdir / "ga_progress.html")
 
+    # Summary index
     write_run_index_simple(outdir, job_id, reports_public_base="/reports")
 
 
