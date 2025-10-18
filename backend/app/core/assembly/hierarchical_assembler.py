@@ -1,46 +1,46 @@
 # File: backend/app/core/assembly/hierarchical_assembler.py
-# Version: v0.4.3
-
+# Version: v0.8.1
 """
-Hierarchical assembler: recursively subdivide a target sequence into fragments,
-compute overlaps between each layer’s children via GA, and build a tree of
-FragmentNode that you can later traverse or export via separate utilities.
+Hierarchical assembler: recursively subdivide the target into fragments,
+optimize overlaps between children via GA, and build a FragmentNode tree.
 
-v0.4.3:
-- Minor log tweak: remove "gap<=..." wording now that the span gate is disabled
-  in GA (v1.2.0). Logs focus on length/Tm/GC/run only.
+v0.8.1 — User-facing base-1 labels
+- Child fragment_id now uses P-<parent+1>, F-<idx+1> (was base-0).
+- Log messages mentioning "F-<n>" are printed base-1.
+
+v0.8.0 — Enforce per-junction minimum overlaps from the planner + auto-fix loop
+- The end-aware planner now returns (positions, hat_min_overlaps).
+- Pass those minimums into GA (min_overlap_per_junction) so GA cannot shrink
+  children below the planner’s expectations.
+- After GA, validate FULL child lengths. If any child violates [min..max],
+  increase the adjacent junction-minimums just enough to fix the deficit and
+  re-run GA (bounded retries). This prevents <min children like 91 bp.
 """
 
-from pathlib import Path
-import math
+from __future__ import annotations
+
 import logging
 from typing import List, Tuple, Dict, Optional
 
 from backend.app.core.models.fragment_node import FragmentNode
-
-from backend.app.config.config_level import LevelConfig, load_levels_config
-from backend.app.config.config_global import GlobalConfig, load_global_config
-
-from backend.app.core.assembly.ga_overlap_selector import (GAOverlapSelector,NoOverlapCandidatesError,)
-from backend.app.core.visualization.oligo_html_visualizer import reverse_complement
-
-from backend.app.core.export.fasta_exporter import export_fragments_to_fasta
-from backend.app.core.export.json_exporter import export_tree_to_json
-from backend.app.core.visualization.tree_html_exporter import export_tree_to_html
-from backend.app.core.visualization.cluster_html_report import export_all_levels
-from backend.app.core.export.analysis_exporter import analyze_tree_to_json
-from backend.app.core.visualization.analysis_html_report import export_analysis_html
+from backend.app.config.config_level import LevelConfig
+from backend.app.config.config_global import GlobalConfig
+from backend.app.core.assembly.ga_overlap_selector import (
+    GAOverlapSelector,
+    NoOverlapCandidatesError,
+)
+from backend.app.core.assembly.endaware_planner import plan_bodies_endaware_with_prescan
 
 
 class AssemblerError(RuntimeError):
-    """Raised when hierarchical assembly cannot satisfy overlap constraints after retries."""
+    pass
+
+
+MAX_GA_RETRIES = 12
+MAX_FIX_ROUNDS = 6  # times we'll bump per-junction mins and retry GA
 
 
 class HierarchicalAssembler:
-    """
-    Drives the recursive fragment-split → GA-overlap → recurse process.
-    """
-
     def __init__(
         self,
         levels_cfg: Dict[int, LevelConfig],
@@ -55,13 +55,21 @@ class HierarchicalAssembler:
     # --------------------- Public API ---------------------
 
     def build(self, full_seq: str, root_id: str) -> FragmentNode:
-        """
-        Start the recursion at level 0, covering the entire sequence.
-        The root node is always sense strand ('+').
-        """
+        """Start recursion at level 0, covering the entire sequence."""
         self.sequence_id = root_id
 
-        root_node = FragmentNode(
+        l0 = self.levels.get(0)
+        if l0 is None:
+            raise ValueError("levels.json must define level=0")
+
+        L0 = len(full_seq)
+        if not (l0.fragment_min_size <= L0 <= l0.fragment_max_size):
+            raise ValueError(
+                f"[L0] input sequence length {L0} out of fragment range "
+                f"({l0.fragment_min_size}..{l0.fragment_max_size})"
+            )
+
+        root = FragmentNode(
             fragment_id=f"S-{root_id}_L-0_P-0_F-0",
             level=0,
             start=0,
@@ -75,30 +83,47 @@ class HierarchicalAssembler:
             children=[],
         )
 
-        root_node.children = self._build_children(
-            full_seq, level=0, start=0, end=len(full_seq), parent_frag_index=0
+        root.children = self._build_children(
+            full_seq=full_seq, level=0, start=0, end=len(full_seq),
+            parent_frag_index=0, parent_node=root
         )
+        return root
 
-        return root_node
+    # --------------------- Recursion ---------------------
 
-    # --------------------- Internals ---------------------
-
-    def _run_ga_or_adjust(
+    def _build_children(
         self,
         full_seq: str,
         level: int,
-        positions: List[Tuple[int, int]],
-        bodies: List[str],
-        cfg: LevelConfig,
-    ):
-        """
-        Try GA; if a junction filters down to zero candidates, attempt to move that cut
-        according to global retry policy. Returns GA best, log, and possibly adjusted positions.
-        """
-        next_cfg = self.levels.get(level + 1)
-        attempts_left = self.global_cfg.max_total_adjustment_rounds
+        start: int,
+        end: int,
+        parent_frag_index: int,
+        parent_node: FragmentNode,
+    ) -> List[FragmentNode]:
+        cfg = self.levels.get(level)
+        L = end - start
 
-        def make_ga(curr_positions: List[Tuple[int, int]]) -> GAOverlapSelector:
+        if cfg is None:
+            return []
+
+        if not (cfg.fragment_min_size <= L <= cfg.fragment_max_size):
+            raise ValueError(
+                f"[L{level}] fragment length {L} out of range "
+                f"({cfg.fragment_min_size}..{cfg.fragment_max_size})"
+            )
+
+        # --- End-aware, pre-scan (positions + per-junction **min** overlaps) ---
+        positions, min_ov_lens = plan_bodies_endaware_with_prescan(
+            full_seq=full_seq,
+            start=start,
+            end=end,
+            cfg=cfg,
+            tm_method=self.global_cfg.tm_method,
+            tm_params=self.global_cfg.tm_params_dict(),
+        )
+
+        def make_ga(curr_positions: List[Tuple[int, int]],
+                    min_j: Optional[List[int]]) -> GAOverlapSelector:
             ga = GAOverlapSelector(
                 full_sequence=full_seq,
                 oligo_positions=curr_positions,
@@ -113,191 +138,111 @@ class HierarchicalAssembler:
                 run_max=cfg.overlap_run_max,
                 disallowed_motifs=cfg.overlap_disallowed_motifs,
                 allowed_motifs=cfg.overlap_allowed_motifs,
-                # span gate removed in GA (kept args for compat, but not used)
                 max_gap_allowed=getattr(cfg, "max_gap_allowed", 0),
-                enforce_span=False,
+                enforce_span=True,  # must straddle the junction
                 tm_method=self.global_cfg.tm_method,
                 tm_params=self.global_cfg.tm_params_dict(),
                 ga_params=self.global_cfg.ga_params(),
+                min_child_full_len=cfg.min_children_size,
+                max_child_full_len=cfg.max_children_size,
+                # CRITICAL: prevent GA from picking overlaps shorter than planner’s minima
+                min_overlap_per_junction=min_j,
             )
             ga.set_cpu_fraction(self.global_cfg.cpu_workers_fraction)
             return ga
 
-        while True:
+        attempts = 0
+        last_err: Optional[NoOverlapCandidatesError] = None
+
+        # Keep a working copy of minima we can bump if needed
+        work_min = list(min_ov_lens)
+
+        while attempts < MAX_GA_RETRIES:
             try:
-                # concise log (no "gap<=" wording anymore)
                 self.log.info(
-                    "Level %d: GA on %d junction(s); overlap %d-%d, Tm %s, GC %s, run %s",
-                    level,
-                    len(positions) - 1,
-                    cfg.overlap_min_size,
-                    cfg.overlap_max_size,
-                    f"{cfg.overlap_tm_min}-{cfg.overlap_tm_max}",
-                    f"{cfg.overlap_gc_min}-{cfg.overlap_gc_max}",
-                    f"{cfg.overlap_run_min}-{cfg.overlap_run_max}",
+                    "Level %d: GA on %d junction(s); overlap %d-%d",
+                    level, len(positions) - 1, cfg.overlap_min_size, cfg.overlap_max_size,
                 )
-                ga = make_ga(positions)
-                best, log = ga.evolve()
-                ga_detail = getattr(ga, "progress_detail", [])
-                return best, log, positions, [full_seq[s:e] for s, e in positions], ga_detail
+                # Inner “fix-up” loop: if after GA any child violates size bounds, bump mins and retry GA
+                fix_round = 0
+                while fix_round <= MAX_FIX_ROUNDS:
+                    ga = make_ga(positions, work_min)
+                    best, progress_log = ga.evolve()
+
+                    # Attach GA progress to the **parent/cluster** node (for reporting)
+                    parent_node.ga_log = list(progress_log)
+                    parent_node.ga_detail = list(ga.progress_detail)
+                    parent_node.ga_cluster_id = f"S-{self.sequence_id}_L-{level}_S-{start}_E-{end}"
+
+                    # Validate FULL child lengths against cfg bounds
+                    bad_idx = self._find_first_child_size_violation(full_seq, positions, best.overlaps, cfg)
+                    if bad_idx is None:
+                        # All good, build children nodes
+                        children = self._materialize_children(full_seq, positions, best.overlaps, level, parent_frag_index)
+                        return children
+                    else:
+                        # Too short/long → bump adjacent per-junction minimum overlaps and retry GA
+                        i, length, vtype = bad_idx
+                        deficit = (cfg.min_children_size - length) if vtype == "too_short" else (length - cfg.max_children_size)
+                        self._bump_minima_for_child(i, deficit, work_min, cfg)
+                        # NOTE: print F-<idx+1> (base-1)
+                        self.log.warning(
+                            "[L%d] Child F-%d length %d is %s bound [%d..%d] ⇒ bump mins → %s; fix_round %d/%d",
+                            level, i + 1, length, "below" if vtype == "too_short" else "above",
+                            cfg.min_children_size, cfg.max_children_size, work_min, fix_round+1, MAX_FIX_ROUNDS
+                        )
+                        fix_round += 1
+
+                # If we drop out of fix loop, give up with a helpful error
+                raise AssemblerError(
+                    f"[L{level}] Unable to satisfy child size bounds after {MAX_FIX_ROUNDS} fix rounds; "
+                    f"consider relaxing overlap or child size constraints."
+                )
 
             except NoOverlapCandidatesError as err:
+                attempts += 1
+                last_err = err
                 self.log.warning(
                     ("Level %d: zero candidates at junction %d (cut %d|%d). "
-                     "Reasons: %s"),
-                    level,
-                    err.junction_index,
-                    err.left_end,
-                    err.right_start,
-                    err.formatted_reasons(),
+                     "Reasons: %s — retry %d/%d"),
+                    level, err.junction_index, err.left_end, err.right_start,
+                    err.formatted_reasons(), attempts, MAX_GA_RETRIES,
                 )
-                if attempts_left <= 0:
-                    raise AssemblerError(
-                        f"Level {level}: cannot satisfy overlap constraints at cut "
-                        f"{err.left_end}|{err.right_start} after "
-                        f"{self.global_cfg.max_total_adjustment_rounds} adjustment round(s). "
-                        f"Reasons: {err.formatted_reasons()}"
-                    ) from err
+                positions = self._jitter_positions(positions, radius=min(attempts, 5))
+                # Also relax local minima slightly near the reported junction, if we have them
+                if work_min and 0 <= err.junction_index < len(work_min):
+                    work_min[err.junction_index] = max(cfg.overlap_min_size, work_min[err.junction_index] - 1)
+        else:
+            raise AssemblerError(self._format_infeasible_message(level, last_err, cfg))
 
-                # retry: shift the failing cut in small steps (respect next-level size bounds)
-                j = err.junction_index
-                positions2 = positions[:]
-                cut = positions2[j][1]  # == positions2[j+1][0]
-                deltas = []
-                step = self.global_cfg.division_adjust_step_bp
-                for k in range(1, self.global_cfg.division_adjust_attempts_per_junction + 1):
-                    mag = step * k
-                    deltas.extend([+mag, -mag])
+    # --------------------- Helpers ---------------------
 
-                for delta in deltas:
-                    new_cut = cut + delta
-                    left_s, left_e = positions2[j]
-                    right_s, right_e = positions2[j + 1]
-                    if not (left_s < new_cut < right_e):
-                        continue
-
-                    if next_cfg:
-                        left_len = new_cut - left_s
-                        right_len = right_e - new_cut
-                        if left_len < next_cfg.fragment_min_size or left_len > next_cfg.fragment_max_size:
-                            continue
-                        if right_len < next_cfg.fragment_min_size or right_len > next_cfg.fragment_max_size:
-                            continue
-
-                    positions_try = positions2[:]
-                    positions_try[j] = (left_s, new_cut)
-                    positions_try[j + 1] = (new_cut, right_e)
-
-                    try:
-                        self.log.info(
-                            "Level %d: retry GA after shifting junction %d by %+d bp → cut @ %d",
-                            level, j, delta, new_cut
-                        )
-                        ga_try = make_ga(positions_try)
-                        best, log = ga_try.evolve()
-                        ga_detail = getattr(ga_try, "progress_detail", [])
-                        return best, log, positions_try, [full_seq[s:e] for s, e in positions_try], ga_detail
-                    except NoOverlapCandidatesError as _:
-                        continue
-
-                attempts_left -= 1
-                positions = self._jitter_all_cuts(
-                    positions, next_cfg, self.global_cfg.division_adjust_step_bp // 2
-                )
-
-    def _jitter_all_cuts(
-        self,
-        positions: List[Tuple[int, int]],
-        next_cfg: Optional[LevelConfig],
-        max_shift: int,
-    ) -> List[Tuple[int, int]]:
-        """
-        Apply a small left/right jitter to each internal cut to escape synchronized dead-ends.
-        Always respects child length bounds if next_cfg is present.
-        """
-        if max_shift <= 0 or len(positions) <= 2:
-            return positions
-
-        new_pos = positions[:]
-        for j in range(len(positions) - 1):
-            left_s, left_e = new_pos[j]
-            right_s, right_e = new_pos[j + 1]
-            cut = left_e
-            for delta in (max_shift, -max_shift):
-                new_cut = cut + delta
-                if not (left_s < new_cut < right_e):
-                    continue
-                if next_cfg:
-                    left_len = new_cut - left_s
-                    right_len = right_e - new_cut
-                    if not (next_cfg.fragment_min_size <= left_len <= next_cfg.fragment_max_size):
-                        continue
-                    if not (next_cfg.fragment_min_size <= right_len <= next_cfg.fragment_max_size):
-                        continue
-                new_pos[j] = (left_s, new_cut)
-                new_pos[j + 1] = (new_cut, right_e)
-                break
-        return new_pos
-
-    def _build_children(
+    def _materialize_children(
         self,
         full_seq: str,
+        positions: List[Tuple[int, int]],
+        overlaps: List[Tuple[str, int, int]],
         level: int,
-        start: int,
-        end: int,
         parent_frag_index: int,
     ) -> List[FragmentNode]:
-        """
-        Build child nodes of fragment [start:end] at given level.
-        """
-        cfg = self.levels.get(level)
-        L = end - start
-
-        if cfg is None or L < cfg.fragment_min_size:
-            return []
-
-        # 1) number of children
-        ideal_n = max(1, round(L / cfg.fragment_max_size))
-        n = min(max(ideal_n, cfg.min_children), cfg.max_children)
-
-        # 2) equal-spaced bodies
-        bounds: List[Tuple[int, int]] = []
-        for i in range(n):
-            s_i = start + math.floor(i * L / n)
-            e_i = start + math.floor((i + 1) * L / n)
-            bounds.append((s_i, e_i))
-
-        bodies = [full_seq[s:e] for s, e in bounds]
-        positions = bounds
-
-        # 3) GA search (+ retries on failure)
-        best, log, positions, bodies, ga_detail = self._run_ga_or_adjust(
-            full_seq=full_seq, level=level, positions=positions, bodies=bodies, cfg=cfg
-        )
-
-        # 4) construct children with extended bounds from chosen overlaps
-        children: List[FragmentNode] = []
         n = len(positions)
-        for idx, ((s_i, e_i), body_seq) in enumerate(zip(positions, bodies)):
-            prev_ov = best.overlaps[idx - 1] if idx > 0 else None
-            next_ov = best.overlaps[idx] if idx < n - 1 else None
+        children: List[FragmentNode] = []
+        for idx, (s_i, e_i) in enumerate(positions):
+            prev_ov = overlaps[idx - 1] if idx > 0 else None
+            next_ov = overlaps[idx] if idx < n - 1 else None
 
             ext_s = prev_ov[1] if prev_ov else s_i
             ext_e = next_ov[2] if next_ov else e_i
             frag_seq = full_seq[ext_s:ext_e]
-
             strand = "+" if (idx % 2 == 0) else "-"
 
-            prev_seq = prev_ov[0] if prev_ov else ""
-            next_seq = next_ov[0] if next_ov else ""
-            if strand == "-":
-                prev_seq = reverse_complement(prev_seq)
-                next_seq = reverse_complement(next_seq)
+            prev_seq = full_seq[prev_ov[1]:prev_ov[2]] if prev_ov else ""
+            next_seq = full_seq[next_ov[1]:next_ov[2]] if next_ov else ""
 
-            next_cfg = self.levels.get(level + 1)
-            is_leaf = next_cfg is None or (ext_e - ext_s) < next_cfg.fragment_min_size
+            is_leaf = (self.levels.get(level + 1) is None)
 
-            fragment_id = f"S-{self.sequence_id}_L-{level+1}_P-{parent_frag_index}_F-{idx}"
+            # USER-FACING base-1 labels for P and F:
+            fragment_id = f"S-{self.sequence_id}_L-{level+1}_P-{parent_frag_index+1}_F-{idx+1}"
 
             node = FragmentNode(
                 fragment_id=fragment_id,
@@ -309,47 +254,137 @@ class HierarchicalAssembler:
                 overlap_prev=prev_seq,
                 overlap_next=next_seq,
                 is_oligo=is_leaf,
-                ga_log=log,
-                ga_detail=ga_detail,
-                ga_cluster_id=f"S-{self.sequence_id}_L-{level}_S-{start}_E-{end}",
+                ga_log=[],
                 children=[],
             )
 
+            # Recurse: child becomes parent for next level (parent_frag_index remains numeric)
             node.children = self._build_children(
-                full_seq, level + 1, ext_s, ext_e, parent_frag_index=idx
+                full_seq, level + 1, ext_s, ext_e, parent_frag_index=idx, parent_node=node
             )
             children.append(node)
-
         return children
 
+    def _find_first_child_size_violation(
+        self,
+        full_seq: str,
+        positions: List[Tuple[int, int]],
+        overlaps: List[Tuple[str, int, int]],
+        cfg: LevelConfig,
+    ) -> Optional[Tuple[int, int, str]]:
+        """
+        Return (index, length, 'too_short'|'too_long') of the first violating child,
+        or None if all are within [min..max].
+        """
+        n = len(positions)
+        for idx, (s_i, e_i) in enumerate(positions):
+            prev_ov = overlaps[idx - 1] if idx > 0 else None
+            next_ov = overlaps[idx] if idx < n - 1 else None
+            ext_s = prev_ov[1] if prev_ov else s_i
+            ext_e = next_ov[2] if next_ov else e_i
+            Lfull = ext_e - ext_s
+            if Lfull < cfg.min_children_size:
+                return (idx, Lfull, "too_short")
+            if Lfull > cfg.max_children_size:
+                return (idx, Lfull, "too_long")
+        return None
 
-# -----------------------------------------------------------------------------
-# Example usage (manual test)
-# -----------------------------------------------------------------------------
-if __name__ == "__main__":
-    # 1) load hierarchical levels from JSON:
-    levels = load_levels_config(Path("app/config/levels.json"))
-    gconf = load_global_config(Path("app/config/globals.json"))
+    def _bump_minima_for_child(
+        self,
+        child_idx: int,
+        deficit: int,
+        work_min: List[int],
+        cfg: LevelConfig,
+    ) -> None:
+        """
+        Increase the minimum overlap(s) adjacent to child `child_idx` just enough to
+        fix the size violation by spreading the delta over the two sides.
+        """
+        if deficit <= 0:
+            return
+        nJ = len(work_min)
+        # Distribute roughly evenly to left/right junctions
+        left_add = (deficit + 1) // 2
+        right_add = deficit // 2
+        if child_idx > 0:
+            jL = child_idx - 1
+            work_min[jL] = min(cfg.overlap_max_size, max(cfg.overlap_min_size, work_min[jL] + left_add))
+        if child_idx < nJ:
+            jR = child_idx
+            work_min[jR] = min(cfg.overlap_max_size, max(cfg.overlap_min_size, work_min[jR] + right_add))
 
-    # 2) read one sequence from FASTA:
-    from Bio import SeqIO
-    rec = next(SeqIO.parse("backend/data/input_sequences_rnd_9000.fasta", "fasta"))
-    seq = str(rec.seq).upper()
-    root_id = rec.id
+    def _jitter_positions(
+        self,
+        positions: List[Tuple[int, int]],
+        radius: int = 1,
+    ) -> List[Tuple[int, int]]:
+        if radius <= 0 or len(positions) <= 2:
+            return positions
+        new_pos = positions[:]
+        for j in range(len(positions) - 1):
+            ls, le = new_pos[j]
+            rs, re = new_pos[j + 1]
+            cut = le
+            moved = False
+            for d in range(1, radius + 1):
+                for delta in (d, -d):
+                    nc = cut + delta
+                    if ls < nc < re:
+                        new_pos[j] = (ls, nc)
+                        new_pos[j + 1] = (nc, re)
+                        moved = True
+                        break
+                if moved:
+                    break
+        return new_pos
 
-    # 3) build the hierarchy:
-    asm = HierarchicalAssembler(levels, gconf)
-    root = asm.build(seq, root_id)
+    def _format_infeasible_message(
+        self,
+        level: int,
+        err: Optional[NoOverlapCandidatesError],
+        cfg: LevelConfig,
+    ) -> str:
+        if err is None:
+            return (f"[L{level}] No feasible overlap configuration after {MAX_GA_RETRIES} retries; "
+                    "consider relaxing overlap constraints.")
+        reasons = getattr(err, "reasons", {}) or {}
+        reason_str = ", ".join(f"{k}:{v}" for k, v in reasons.items()) if reasons else "no-counters"
+        sugg = self._suggestions_from_reasons(reasons, cfg)
+        hints = " ".join(sugg) if sugg else "Consider relaxing Tm/GC/run/motif or widening overlap length range."
+        return (
+            f"[L{level}] Infeasible overlaps at junction {err.junction_index} (cut {err.left_end}|{err.right_start}) "
+            f"after {MAX_GA_RETRIES} retries. Reasons: {reason_str}. {hints}"
+        )
 
-    # 4) export everything:
-    export_fragments_to_fasta(root, Path("backend/data/out/tree_fragments.fasta"), root_id)
-    export_tree_to_json(root, Path("backend/data/out/tree_fragments.json"), root_id)
-    export_tree_to_html(root, Path("backend/data/out/tree_fragments.html"), root_id)
+    @staticmethod
+    def _suggestions_from_reasons(reasons: Dict[str, int], cfg: LevelConfig) -> List[str]:
+        if not reasons:
+            return []
+        tips: List[str] = []
+        total = sum(reasons.values()) or 1
 
-    # 4b) analysis JSON + HTML report (mirrors CLI behavior)
-    analysis_json = Path("backend/data/out/tree_analysis.json")
-    analysis_html = Path("backend/data/out/tree_analysis.html")
-    payload = analyze_tree_to_json(root, analysis_json, root_id)
-    export_analysis_html(payload, analysis_html)
+        def dominant(key: str, frac: float = 0.25) -> bool:
+            return reasons.get(key, 0) / total >= frac
 
-    export_all_levels(root, Path("backend/data/out/cluster_reports"), levels, gconf)
+        if dominant("tm_low"):
+            tips.append(f"Tip: lower overlap_tm_min (currently {cfg.overlap_tm_min}) by ~3–5 °C.")
+        if dominant("tm_high"):
+            tips.append(f"Tip: raise overlap_tm_max (currently {cfg.overlap_tm_max}) by ~2–3 °C.")
+        if dominant("gc_low"):
+            tips.append(f"Tip: lower overlap_gc_min (currently {cfg.overlap_gc_min}) by ~3–5%%.")
+        if dominant("gc_high"):
+            tips.append(f"Tip: raise overlap_gc_max (currently {cfg.overlap_gc_max}) by ~3–5%%.")
+        if dominant("run_high"):
+            tips.append(f"Tip: relax overlap_run_max (currently {cfg.overlap_run_max}).")
+        if dominant("run_low"):
+            tips.append("Tip: if you set overlap_run_min, consider lowering it.")
+        if dominant("motif_disallowed"):
+            tips.append("Tip: review overlap_disallowed_motifs; remove overly generic motifs.")
+        if dominant("length_window"):
+            tips.append(
+                f"Tip: widen overlap length range (currently {cfg.overlap_min_size}–{cfg.overlap_max_size} nt) "
+                "or allow a higher body count at this level."
+            )
+        if not tips:
+            tips.append("Tip: relax one of Tm/GC/run/motif constraints, or widen overlap length range.")
+        return tips

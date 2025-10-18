@@ -1,110 +1,175 @@
 # File: backend/app/core/visualization/run_index_simple.py
-# Version: v0.1.0
+# Version: v1.2.0
 """
-Simple, robust HTML index generator for a CornStructor run.
+Modern, grouped index page for a run, with a light "Apple-like" aesthetic.
 
-- Scans the job's output directory for known artifacts and lists whatever exists.
-- No manifest required; no assumptions about a prior CLI.
-- Always writes an index.html so links do not 404.
+Groups:
+- FASTA      → input.fasta, fragments.fasta, oligos.fasta, assembly.gb
+- Tables     → fragments.csv, oligos.csv
+- Parameters → globals.json, levels.json
+- Visuals    → analysis.html, tree.html, GA progress, clusters
 """
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List
 
 
-def _rel(p: Path, base: Path) -> str:
+def _exists(p: Path) -> bool:
     try:
-        return str(p.relative_to(base))
+        return p.is_file()
     except Exception:
-        return p.name
+        return False
 
 
-def _collect_artifacts(outdir: Path) -> Dict[str, List[str]]:
-    """
-    Return mapping of artifact category -> list of relative paths found.
-    """
-    artifacts: Dict[str, List[str]] = {
-        "HTML": [],
-        "JSON": [],
-        "FASTA": [],
-        "Clusters": [],
-        "Other": [],
-    }
-
-    # Singles we commonly produce
-    singles = {
-        "HTML": ["tree.html", "analysis.html", "ga_progress.html"],
-        "JSON": ["tree.json", "analysis.json", "ga_progress.json"],
-        "FASTA": ["fragments.fasta"],
-    }
-    for cat, names in singles.items():
-        for n in names:
-            p = outdir / n
-            if p.is_file():
-                artifacts[cat].append(_rel(p, outdir))
-
-    # Clusters (per-level cluster HTML)
-    clusters_dir = outdir / "clusters"
+def _collect_clusters(clusters_dir: Path) -> list[str]:
+    items: list[str] = []
     if clusters_dir.is_dir():
         for p in sorted(clusters_dir.glob("*.html")):
-            artifacts["Clusters"].append(_rel(p, outdir))
+            items.append(p.name)
+    return items
 
-    # Anything else useful-looking (fallback)
-    for p in sorted(outdir.glob("*")):
-        if p.name in {"index.html", "input.fasta", "clusters"}:
-            continue
-        if p.is_file() and p.suffix.lower() not in {".py", ".log"}:
-            rel = _rel(p, outdir)
-            if not any(rel in lst for lst in artifacts.values()):
-                artifacts["Other"].append(rel)
 
-    # Remove empty categories
-    return {k: v for k, v in artifacts.items() if v}
+def write_run_index_simple(outdir: Path, job_id: str, *, reports_public_base: str = "/reports") -> None:
+    base = f"{reports_public_base}/{job_id}"
+    clusters = _collect_clusters(outdir / "clusters")
 
-def write_run_index_simple(outdir: Path, job_id: str, reports_public_base: str = "/reports") -> Path:
-    """
-    Write a minimal, durable index.html that links to present artifacts.
+    def link(name: str, fname: str) -> str:
+        p = outdir / fname
+        if _exists(p):
+            return f'<a class="item" href="{base}/{fname}" download>{name}</a>'
+        return f'<span class="item disabled">{name}</span>'
 
-    Returns the path to index.html.
-    """
-    outdir.mkdir(parents=True, exist_ok=True)
-    index_path = outdir / "index.html"
+    def link_nodl(name: str, fname: str) -> str:
+        p = outdir / fname
+        if _exists(p):
+            return f'<a class="item" href="{base}/{fname}">{name}</a>'
+        return f'<span class="item disabled">{name}</span>'
 
-    artifacts = _collect_artifacts(outdir)
-    base = reports_public_base.rstrip("/") + f"/{job_id}"
-
-    def _section(title: str, items: List[str]) -> str:
-        lis = "\n".join(f"<li><a href='{base}/{item}' target='_blank' rel='noopener'>{item}</a></li>"
-                        for item in items)
-        return f"<section><h2>{title}</h2><ul>{lis}</ul></section>"
-
-    if artifacts:
-        sections = "\n".join(_section(title, items) for title, items in artifacts.items())
-        msg = ""
-    else:
-        sections = ""
-        msg = "<p><em>No artifacts were detected for this run.</em></p>"
+    clusters_html = ""
+    if clusters:
+        cluster_links = "\n".join(
+            f'<a class="pill" href="{base}/clusters/{fn}">{fn}</a>' for fn in clusters
+        )
+        clusters_html = f"""
+        <div class="card">
+          <div class="card-title">Clusters</div>
+          <div class="cluster-list">{cluster_links}</div>
+        </div>
+        """
 
     html = f"""<!doctype html>
-<meta charset="utf-8">
-<title>CornStructor Report — {job_id}</title>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>CornStructor report — {job_id}</title>
 <style>
-  body {{ font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; }}
-  header {{ margin-bottom: 1rem; }}
-  h1 {{ font-size: 1.6rem; margin: 0 0 .25rem 0; }}
-  h2 {{ font-size: 1.1rem; margin: 1rem 0 .25rem 0; }}
-  ul {{ margin: .25rem 0 1rem 1.2rem; }}
-  .meta {{ color: #555; font-size: .9rem; }}
-  .back a {{ text-decoration: none; }}
+  :root {{
+    --bg: #f5f5f7;
+    --card: #ffffff;
+    --text: #1d1d1f;
+    --sub: #6e6e73;
+    --link: #0071e3;
+    --border: #e5e5ea;
+    --pill: #f2f2f7;
+  }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    margin: 0; padding: 24px;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }}
+  .wrap {{ max-width: 1100px; margin: 0 auto; }}
+  header {{ margin: 8px 0 20px 0; }}
+  h1 {{
+    font-weight: 700; letter-spacing: -.02em; margin: 0 0 4px 0;
+    font-size: 22px;
+  }}
+  .sub {{ color: var(--sub); font-size: 13px; }}
+  .grid {{
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    align-items: start;
+  }}
+  .card {{
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.05);
+  }}
+  .card-title {{
+    font-weight: 650; margin-bottom: 10px;
+  }}
+  .item-list {{ display: flex; flex-direction: column; gap: 8px; }}
+  a.item {{ color: var(--link); text-decoration: none; font-weight: 500; }}
+  a.item:hover {{ text-decoration: underline; }}
+  .item.disabled {{ color: #bbb; text-decoration: none; cursor: not-allowed; }}
+  .pill {{
+    display: inline-block; padding: 6px 10px; background: var(--pill);
+    border: 1px solid var(--border); border-radius: 999px; text-decoration: none;
+    color: var(--text); margin: 4px 6px 0 0; font-size: 12px;
+  }}
+  .pill:hover {{ border-color: #c7c7cc; }}
+  footer {{ margin-top: 22px; color: var(--sub); font-size: 12px; }}
 </style>
-<header>
-  <h1>Run {job_id}</h1>
-  <div class="meta">Artifacts under <code>{base}</code></div>
-</header>
-{msg}
-{sections}
-<div class="back"><a href="/">&larr; Back to CornStructor</a></div>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Report for run <code>{job_id}</code></h1>
+      <div class="sub">Quick access to exports and visualizations.</div>
+    </header>
+
+    <section class="grid">
+
+      <div class="card">
+        <div class="card-title">FASTA</div>
+        <div class="item-list">
+          {link("Input FASTA", "input.fasta")}
+          {link("All fragments (FASTA)", "fragments.fasta")}
+          {link("Oligos only (FASTA)", "oligos.fasta")}
+          {link("GenBank (assembly.gb)", "assembly.gb")}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Tables</div>
+        <div class="item-list">
+          {link("All fragments (CSV)", "fragments.csv")}
+          {link("Oligos only (CSV)", "oligos.csv")}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Parameters</div>
+        <div class="item-list">
+          {link("Globals (JSON)", "globals.json")}
+          {link("Levels (JSON)", "levels.json")}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Visualizations</div>
+        <div class="item-list">
+          {link_nodl("Analysis overview", "analysis.html")}
+          {link_nodl("Assembly tree", "tree.html")}
+          {link_nodl("GA progress (HTML)", "ga_progress.html")}
+          {link("GA progress (JSON)", "ga_progress.json")}
+          {link("Tree (JSON)", "tree.json")}
+        </div>
+      </div>
+
+      {clusters_html}
+
+    </section>
+
+    <footer>
+      CornStructor — generated locally. All files are transient per-run artifacts.
+    </footer>
+  </div>
+</body>
+</html>
 """
-    index_path.write_text(html, encoding="utf-8")
-    return index_path
+    (outdir / "index.html").write_text(html, encoding="utf-8")

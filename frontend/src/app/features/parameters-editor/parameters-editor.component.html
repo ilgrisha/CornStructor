@@ -1,5 +1,5 @@
 <!-- File: frontend/src/app/features/parameters-editor/parameters-editor.component.html -->
-<!-- Version: v0.5.1 -->
+<!-- Version: v0.6.0 -->
 <div class="modal" *ngIf="open">
   <div class="dialog">
     <div class="header">
@@ -35,9 +35,19 @@
             <ng-container *ngIf="kv.key !== 'ga' && kv.key !== 'tm'">
               <div class="label">{{ kv.key }}</div>
 
-              <!-- Primitive editor -->
+              <!-- Boolean -->
+              <label class="switch" *ngIf="isBoolean(kv.value)">
+                <input
+                  type="checkbox"
+                  [checked]="kv.value === true"
+                  (change)="onGlobalChange(kv.key, $any($event.target).checked)"
+                />
+                <span class="slider"></span>
+              </label>
+
+              <!-- Primitive number/text -->
               <input
-                *ngIf="isPrimitive(kv.value)"
+                *ngIf="!isBoolean(kv.value) && isPrimitive(kv.value)"
                 class="field"
                 [type]="isNumeric(kv.value) ? 'number' : 'text'"
                 [ngModel]="kv.value"
@@ -45,7 +55,7 @@
               />
 
               <!-- JSON editor for object/array (keys other than ga/tm) -->
-              <div class="json-wrap" *ngIf="isObjectLike(kv.value)">
+              <div class="json-wrap" *ngIf="isObjectLike(kv.value) || isArray(kv.value)">
                 <textarea
                   class="json"
                   [class.invalid]="globalJsonErrs[kv.key]"
@@ -57,7 +67,7 @@
             </ng-container>
           </div>
 
-          <!-- GA group: individual fields -->
+          <!-- GA group: individual fields with boolean support -->
           <div class="group-card" *ngIf="tp.globals()?.ga">
             <div class="group-header">
               <div class="group-title">ga</div>
@@ -66,9 +76,19 @@
               <div class="row" *ngFor="let k of gaKeys()">
                 <div class="label">{{ k }}</div>
 
-                <!-- Primitive -->
+                <!-- Boolean -->
+                <label class="switch" *ngIf="isBoolean(gaValue(k))">
+                  <input
+                    type="checkbox"
+                    [checked]="gaValue(k) === true"
+                    (change)="onGlobalNestedToggle('ga', k, $any($event.target).checked)"
+                  />
+                  <span class="slider"></span>
+                </label>
+
+                <!-- Primitive number/text -->
                 <input
-                  *ngIf="isPrimitive(gaValue(k))"
+                  *ngIf="!isBoolean(gaValue(k)) && isPrimitive(gaValue(k))"
                   class="field"
                   [type]="isNumeric(gaValue(k)) ? 'number' : 'text'"
                   [ngModel]="gaValue(k)"
@@ -76,7 +96,7 @@
                 />
 
                 <!-- Object/Array fallback (rare) -->
-                <div class="json-wrap" *ngIf="isObjectLike(gaValue(k))">
+                <div class="json-wrap" *ngIf="isObjectLike(gaValue(k)) || isArray(gaValue(k))">
                   <textarea
                     class="json"
                     [ngModel]="toPrettyJson(gaValue(k))"
@@ -87,7 +107,7 @@
             </div>
           </div>
 
-          <!-- TM group: expandable box with individual fields -->
+          <!-- TM group: expandable box with individual fields (boolean+number+text) -->
           <div class="group-card" *ngIf="tp.globals()?.tm">
             <button class="group-header toggle" (click)="tmOpen.set(!tmOpen())" type="button" [attr.aria-expanded]="tmOpen()">
               <div class="chev" [class.open]="tmOpen()"></div>
@@ -98,18 +118,8 @@
               <div class="row" *ngFor="let k of tmKeys()">
                 <div class="label">{{ k }}</div>
 
-                <!-- Typed editor using proper ngSwitch -->
                 <ng-container [ngSwitch]="true">
-                  <!-- number -->
-                  <input
-                    *ngSwitchCase="isNumeric(tmValue(k))"
-                    class="field"
-                    type="number"
-                    [ngModel]="tmValue(k)"
-                    (ngModelChange)="onGlobalNestedChange('tm', k, $event)"
-                  />
-
-                  <!-- boolean (use helper; no 'typeof' in template) -->
+                  <!-- boolean -->
                   <label class="switch" *ngSwitchCase="isBoolean(tmValue(k))">
                     <input
                       type="checkbox"
@@ -118,6 +128,15 @@
                     />
                     <span class="slider"></span>
                   </label>
+
+                  <!-- number -->
+                  <input
+                    *ngSwitchCase="isNumeric(tmValue(k))"
+                    class="field"
+                    type="number"
+                    [ngModel]="tmValue(k)"
+                    (ngModelChange)="onGlobalNestedChange('tm', k, $event)"
+                  />
 
                   <!-- text (default) -->
                   <input
@@ -130,7 +149,7 @@
                 </ng-container>
 
                 <!-- Object/Array fallback (rare) -->
-                <div class="json-wrap" *ngIf="isObjectLike(tmValue(k))">
+                <div class="json-wrap" *ngIf="isObjectLike(tmValue(k)) || isArray(tmValue(k))">
                   <textarea
                     class="json"
                     [ngModel]="toPrettyJson(tmValue(k))"
@@ -171,9 +190,19 @@
               <div class="row" *ngFor="let kv of tp.levels()[sel()] | keyvalue">
                 <div class="label">{{ kv.key }}</div>
 
-                <!-- Primitive -->
+                <!-- Boolean toggle -->
+                <label class="switch" *ngIf="isBoolean(kv.value)">
+                  <input
+                    type="checkbox"
+                    [checked]="kv.value === true"
+                    (change)="onLevelFieldChange(sel(), kv.key, $any($event.target).checked)"
+                  />
+                  <span class="slider"></span>
+                </label>
+
+                <!-- Primitive number/text -->
                 <input
-                  *ngIf="isPrimitive(kv.value)"
+                  *ngIf="!isBoolean(kv.value) && isPrimitive(kv.value)"
                   class="field"
                   [type]="isNumeric(kv.value) ? 'number' : 'text'"
                   [ngModel]="kv.value"
@@ -181,7 +210,7 @@
                 />
 
                 <!-- JSON -->
-                <div class="json-wrap" *ngIf="isObjectLike(kv.value)">
+                <div class="json-wrap" *ngIf="isObjectLike(kv.value) || isArray(kv.value)">
                   <textarea
                     class="json"
                     [class.invalid]="levelJsonErrs[sel()]?.[kv.key]"

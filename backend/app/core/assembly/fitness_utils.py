@@ -1,8 +1,13 @@
 # File: backend/app/core/assembly/fitness_utils.py
-# Version: v0.4.1
+# Version: v0.4.2
 
 """
 Fitness evaluation utilities for the GAOverlapSelector — C-accelerated.
+
+Changes in v0.4.2:
+- Add compatibility aliases: `gc_content_percent` -> `gc_fraction`,
+  and `tm_of_sequence` -> `compute_tm`. This lets older/newer modules
+  import either name without breaking.
 
 Changes in v0.4.1:
 - Switch from deprecated primer3.calcTm → primer3.calc_tm to silence warnings.
@@ -143,7 +148,7 @@ def min_normalized_distance(overlaps: List[str]) -> float:
 
 @lru_cache(maxsize=None)
 def extract_kmer_hashes(sequence: str, k: int) -> FrozenSet[int]:
-    """Set of rolling k‑mer 2‑bit hashes for `sequence` (cached)."""
+    """Set of rolling k-mer 2-bit hashes for `sequence` (cached)."""
     if len(sequence) < k:
         return frozenset()
     hashes: Set[int] = set()
@@ -159,7 +164,7 @@ def extract_kmer_hashes(sequence: str, k: int) -> FrozenSet[int]:
 # --- 3′-end mis-annealing checks --------------------------------------------
 
 def hamming_distance_bits(x: int, y: int, length: int) -> int:
-    """Hamming distance between 2‑bit encoded sequences of given length."""
+    """Hamming distance between 2-bit encoded sequences of given length."""
     xor = x ^ y
     count = 0
     for _ in range(length):
@@ -175,7 +180,7 @@ def count_3prime_mismatch_events(
     three_prime_len: int = THREE_PRIME_LEN,
     max_mismatches: int = THREE_PRIME_MAX_MISMATCHES
 ) -> int:
-    """Count reverse‑complement 3′ tail binding events across oligos."""
+    """Count reverse-complement 3′ tail binding events across oligos."""
     if three_prime_len <= 0 or not overlap:
         return 0
     rc_tail = reverse_complement(overlap[-three_prime_len:])
@@ -196,7 +201,7 @@ def count_3prime_mismatch_events(
 
 
 def count_rc_kmer_hits(overlap: str, oligos: List[str], k: int = KMER_SIZE) -> int:
-    """Total shared k‑mers between RC(overlap) and all oligos."""
+    """Total shared k-mers between RC(overlap) and all oligos."""
     if not overlap or k <= 0:
         return 0
     rc_overlap = reverse_complement(overlap)
@@ -328,3 +333,20 @@ def compute_tm(seq: str, method: str = "PRIMER3", **params) -> float:
             saltcorr=saltcorr,
         )
     )
+
+
+# --- Compatibility aliases ----------------------------------------------------
+def gc_content_percent(seq: str) -> float:
+    """
+    Back-compat alias used by newer planner/GA modules.
+    Equivalent to gc_fraction(seq).
+    """
+    return gc_fraction(seq)
+
+
+def tm_of_sequence(seq: str, method: str = "PRIMER3", **params) -> float:
+    """
+    Back-compat alias used by newer planner/GA modules.
+    Equivalent to compute_tm(seq, method=..., **params).
+    """
+    return compute_tm(seq, method=method, **params)
