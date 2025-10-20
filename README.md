@@ -1,92 +1,109 @@
-# Version: v4.0.0
-
 # CornStructor
+**Version: v4.1.0**
 
-CornStructor is a modern, containerized full-stack app:
+CornStructor is a modern, containerized full‑stack app for hierarchical DNA design:
 
-- **Frontend**: Angular (dev with `ng serve`, prod as static assets)
+- **Frontend**: Angular (dev via `ng serve`, prod as static assets)
 - **Backend**: FastAPI (OpenAPI docs at `/docs`)
 - **Reverse Proxy (prod)**: Nginx
-- **Containers**: Docker Compose (`dev` for live reload, `prod` for immutable builds)
+- **Containers**: Docker Compose (`dev` for hot reload, `prod` for immutable images)
+- **Artifacts**: Served under `/reports/<jobId>/...`
 
-This README tells you how to run **development**, **production**, test the **frontend**, test the **backend**, and exercise the **API**. A quick **troubleshooting** section is included at the end.
+This README shows how to run **development** and **production**, pass **custom ports** using `make`, poke the **API**, run **tests**, and troubleshoot common issues.
 
 ---
 
 ## Table of Contents
-
 1. [Prerequisites](#prerequisites)
 2. [Environment Setup](#environment-setup)
-3. [Development (live reload)](#development-live-reload)
-4. [Production (immutable images)](#production-immutable-images)
-5. [Project Structure](#project-structure)
-6. [Backend API](#backend-api)
+3. [Quick Start](#quick-start)
+4. [Development (live reload)](#development-live-reload)
+5. [Production (immutable images)](#production-immutable-images)
+6. [Custom Ports with Make](#custom-ports-with-make)
+7. [Project Structure](#project-structure)
+8. [Backend API](#backend-api)
    - [OpenAPI & Docs](#openapi--docs)
    - [Health Check](#health-check)
    - [Start a Design Job](#start-a-design-job)
    - [Stream Logs (SSE)](#stream-logs-sse)
-7. [Testing](#testing)
+9. [Testing](#testing)
    - [Backend tests (pytest)](#backend-tests-pytest)
    - [Frontend tests (Angular + Jasmine/Karma)](#frontend-tests-angular--jasminekarma)
-8. [Common Commands](#common-commands)
-9. [Troubleshooting](#troubleshooting)
-10. [Design Decisions](#design-decisions)
-11. [Next Steps](#next-steps)
+10. [Troubleshooting](#troubleshooting)
+11. [Design Decisions](#design-decisions)
 
 ---
 
 ## Prerequisites
 
 - **Docker Desktop** (macOS/Windows) or **Docker Engine** (Linux)
-- **Make** (optional, but the `Makefile` simplifies commands)
-- (Optional for running frontend tests locally) **Node.js 20+** and a local Chrome browser
+- **Make** (optional but recommended)
+- (Optional for local frontend tests) **Node.js 20+** and a local Chrome
 
-> If you prefer Colima on macOS: `brew install colima && colima start && docker context use colima`.
+> macOS + Colima users: `brew install colima && colima start && docker context use colima`
 
 ---
 
 ## Environment Setup
 
-We keep a dedicated compose env file for port substitutions:
+We use a Compose env file for convenient overrides:
 
 ```bash
 cp .compose.env.example .compose.env
 ```
 
-Environment variables you can set there:
+Environment variables you may set there (or pass via `make`, see below):
 
-- **BACKEND_PORT** (default 8000) — dev FastAPI port
-- **FRONTEND_PORT_DEV** (default 4200) — dev Angular port
-- **NGINX_PORT** (default 8080) — prod Nginx port
-- **CORS_ORIGINS** (default `*`) — restrict in prod, e.g. `https://your.domain`
+- **BACKEND_PORT** (default **8000**) — dev FastAPI port
+- **FRONTEND_PORT_DEV** (default **4200**) — dev Angular port
+- **NGINX_PORT** (default **8080**) — prod Nginx port
+- **CORS_ORIGINS** (default `*`) — set to your domains in prod
 
-> Note: The backend does not read .env files inside the container. Compose injects the vars it needs.
+> The backend doesn’t read `.env` files itself. Compose injects env vars into containers.
+
+---
+
+## Quick Start
+
+```bash
+# Development (hot reload)
+make dev
+# Frontend: http://localhost:4200
+# Backend API/docs: http://localhost:8000/api , http://localhost:8000/docs
+
+# Production (immutable builds)
+make prod-up
+# App: http://localhost:8080
+```
+
+Stop stacks:
+
+```bash
+make dev-down     # dev
+make prod-down    # prod
+```
 
 ---
 
 ## Development (live reload)
 
-Dev stack uses bind mounts and hot reloads:
+Dev uses bind mounts and hot reload for fast iteration.
 
 ```bash
 make dev
-# Frontend: http://localhost:4200
-# Backend docs: http://localhost:8000/docs
-# Backend API: http://localhost:8000/api
 ```
 
-Frontend: `ng serve` runs inside the frontend container with a proxy:
+- **Frontend**: Angular `ng serve` with a proxy
+  - `/api` → backend:8000
+  - `/reports` → backend:8000
+- **Backend**: Uvicorn `--reload`
+- **Artifacts**: generated under `/reports/<jobId>/...` (served by FastAPI)
 
-- `/api` → backend:8000
-- `/reports` → backend:8000
-
-Backend: `uvicorn --reload` inside the backend container
-
-Artifacts: generated files served at `/reports/<jobId>/...` (dev served by FastAPI)
-
-Stop dev and remove volumes:
+Handy commands:
 
 ```bash
+make logs   # tail logs
+make ps     # list services
 make dev-down
 ```
 
@@ -94,44 +111,67 @@ make dev-down
 
 ## Production (immutable images)
 
-Build and run optimized images with Nginx reverse proxy:
-
 ```bash
 make prod-up
-# Open: http://localhost:8080
+# Open http://localhost:8080
 ```
 
-- Nginx serves built Angular assets and proxies `/api` → backend:8000
-- `/reports` is served statically from a shared volume by Nginx
+- Nginx serves built Angular assets
+- Proxies `/api` → backend:8000
+- Serves `/reports` statically from a shared `reports` volume
 
-Stop & remove:
+Other targets:
 
 ```bash
-make prod-down
+make prod-build   # build only
+make prod-down    # stop + remove volumes
 ```
 
-Rebuild only:
+---
+
+## Custom Ports with Make
+
+Run multiple stacks side-by-side or reuse free ports by passing Make variables:
 
 ```bash
-make prod-build
+# Dev: change backend + frontend ports
+make dev BACKEND_PORT=9000 FRONTEND_PORT_DEV=4300
+
+# Prod: change Nginx external port
+make prod-up NGINX_PORT=9090
+
+# Optional: separate project names for concurrent stacks
+make dev PROJECT=csA BACKEND_PORT=9001 FRONTEND_PORT_DEV=4301
+make prod-up PROJECT=csB NGINX_PORT=9091
+```
+
+`CORS_ORIGINS` can also be provided at invocation time:
+
+```bash
+make dev CORS_ORIGINS="http://localhost:4300,http://127.0.0.1:4300"
 ```
 
 ---
 
 ## Project Structure
 
-```bash
+```text
 backend/
   app/
     api/
       v1/
-        design.py         # POST /design/start, GET /design/{jobId}/logs (SSE)
-        health.py         # GET /health
+        design.py               # POST /design/start, GET /design/{jobId}/logs (SSE)
+        health.py               # GET /health
+        reports_dynamic.py      # /reports/<jobId>/... dynamic artifacts
     core/
-      config.py           # FastAPI settings (Pydantic Settings)
-      jobs/
-        runner.py         # Async job runner + SSE queues
-    main.py               # FastAPI app factory, routers, static /reports in dev
+      assembly/                 # GA + planners
+      export/                   # exporters: FASTA/CSV/JSON/GenBank
+      reporting/                # on-the-fly render + index
+      models/                   # FragmentNode, etc.
+      config.py                 # FastAPI settings
+    cli/
+      genbank_from_tree.py      # CLI to generate GenBank from tree.json + FASTA
+    main.py                     # FastAPI app (dev serves reports)
   requirements.txt
   Dockerfile
 
@@ -148,12 +188,12 @@ frontend/
   Dockerfile
 
 nginx/
-  nginx.conf            # prod reverse proxy + static reports
+  nginx.conf                    # prod reverse proxy + static reports
 
-docker-compose.dev.yml  # dev stack (bind mounts + reload)
-docker-compose.yml      # prod stack (immutable)
-.compose.env.example     # sample env for compose
-Makefile                # convenience commands
+docker-compose.dev.yml          # dev stack (bind mounts + reload)
+docker-compose.yml              # prod stack (immutable)
+.compose.env.example            # sample env overrides for Compose
+Makefile                        # convenience commands
 ```
 
 ---
@@ -162,8 +202,8 @@ Makefile                # convenience commands
 
 ### OpenAPI & Docs
 
-- Dev: http://localhost:8000/docs (schema at `/api/openapi.json`)
-- Prod: http://localhost:8080/docs (proxied through Nginx)
+- Dev: <http://localhost:8000/docs> (schema at `/api/openapi.json`)
+- Prod: <http://localhost:8080/docs> (proxied through Nginx)
 
 ### Health Check
 
@@ -174,14 +214,13 @@ curl -s http://localhost:8080/api/health
 ```
 
 Response:
-
 ```json
 {"status":"ok"}
 ```
 
 ### Start a Design Job
 
-`POST /api/design/start` (returns both job_id and jobId for compatibility)
+`POST /api/design/start` (returns both `job_id` and `jobId`)
 
 ```bash
 curl -s -X POST http://localhost:8000/api/design/start   -H "Content-Type: application/json"   -d '{ "sequence": "ACGTACGTACGTACGTACGT" }'
@@ -190,26 +229,23 @@ curl -s -X POST http://localhost:8000/api/design/start   -H "Content-Type: appli
 
 ### Stream Logs (SSE)
 
-Use the jobId from the start response.
+Use the `jobId` from the start response.
 
-Dev (FastAPI directly):
-
+Dev:
 ```bash
 curl -N http://localhost:8000/api/design/<jobId>/logs
 ```
 
-Prod (Nginx):
-
+Prod:
 ```bash
 curl -N http://localhost:8080/api/design/<jobId>/logs
 ```
 
-Lines may include:
-
-- `RUN: ...` (invoked CLI)
-- normal logs and `ERR: ...` lines
-- `RESULT: /reports/<jobId>/<file or directory>` artifact links
-- `EXIT: <code>` (log stream completed sentinel)
+Log stream includes:
+- `RUN:` invoked tools
+- progress + `ERR:` lines
+- `RESULT: /reports/<jobId>/<file>` artifact links
+- `EXIT: <code>` sentinel
 
 ---
 
@@ -217,117 +253,62 @@ Lines may include:
 
 ### Backend tests (pytest)
 
-Run in the backend container (dev stack):
-
 ```bash
 make dev
 docker compose -f docker-compose.dev.yml exec backend pytest -q
-```
-
-Or target a specific test:
-
-```bash
+# specific test:
 docker compose -f docker-compose.dev.yml exec backend pytest -q backend/tests/test_api_health.py
 ```
 
-Local run (outside Docker) is fine too if you have Python 3.11 and `pip install -r backend/requirements.txt`.
+Local (outside Docker) works too with Python 3.11 and:
+```bash
+pip install -r backend/requirements.txt
+pytest -q
+```
 
 ### Frontend tests (Angular + Jasmine/Karma)
 
-Recommended: run on your host (uses your local Chrome):
-
+Recommended on host:
 ```bash
 cd frontend
 npm install
 npm test
-# or CI-style:
+# or headless CI:
 npm run test:ci
 ```
 
-If you prefer running inside the dev container (headless only, additional deps may be required):
-
+In container (headless only; may need extra deps):
 ```bash
-# Install test deps inside the container (first time):
-docker compose -f docker-compose.dev.yml exec frontend sh -lc   "npm install -D jasmine-core @types/jasmine karma karma-chrome-launcher karma-jasmine karma-jasmine-html-reporter karma-coverage @angular-devkit/build-angular"
-
-# Then:
 docker compose -f docker-compose.dev.yml exec frontend sh -lc "npm test"
-```
-
-If Chrome is missing in the container, run tests on host or add a Chrome binary to the image.
-
----
-
-## Common Commands
-
-```bash
-# Dev up / down
-make dev
-make dev-down
-
-# Prod up / down / build
-make prod-up
-make prod-down
-make prod-build
-
-# Tail logs from running services
-make logs
-
-# Doctor (basic Docker diagnostics)
-make doctor
 ```
 
 ---
 
 ## Troubleshooting
 
-### Docker daemon not running
+**Docker not running**
+- Start Docker Desktop / daemon; verify with `docker version`
 
-- Start Docker Desktop: `open -a "Docker"`
-- Verify: `docker version`
+**Makefile “missing separator”**
+- Recipe lines must start with a TAB
 
-### Makefile “missing separator”
+**Frontend proxy errors (ECONNREFUSED)**
+- Backend likely down; check logs
+- Dev endpoints:
+  - API: <http://localhost:8000/api>
+  - Frontend: <http://localhost:4200>
 
-- Recipe lines must start with a **TAB**. Use the provided Makefile.
+**npm lock mismatch**
+- Dev uses `npm install` in the container to reconcile quickly
+- For strict builds later, fix the lock and switch to `npm ci`
 
-### Frontend dev proxy errors (ECONNREFUSED)
+**CORS/SSE issues**
+- Set `CORS_ORIGINS` appropriately
+- Nginx dev/prod configs set `proxy_buffering off` for SSE
 
-- Usually means backend isn’t up. Check `backend-1` logs.
-- Dev URLs:
-  - API: http://localhost:8000/api
-  - Frontend: http://localhost:4200
-
-### npm ci fails due to lock mismatch
-
-- In dev, we use `npm install` inside the container to reconcile.
-- To restore strictness later, clean up lock locally and switch back to `npm ci`.
-
-### Backend Pydantic “extra inputs are not permitted”
-
-- We configured `config.py` to ignore unknown env keys and not read `.env` in-container.
-- Ensure you’re using `.compose.env` for Compose substitution.
-
-### SSE not updating in UI
-
-- Check `CORS_ORIGINS` and make sure the frontend uses EventSource against `/api/design/<jobId>/logs`.
-- In prod, confirm Nginx `location /api/` has `proxy_buffering off;`.
-
-### Clean rebuilds
-
+**Clean rebuilds**
 ```bash
 make dev-down
 docker compose --env-file .compose.env -f docker-compose.dev.yml build --no-cache backend
 make dev
 ```
-
----
-
-## Design Decisions
-
-- **FastAPI + SSE**: The API spawns the existing CLI via `asyncio.create_subprocess_exec` and streams combined stdout/stderr as Server-Sent Events for simple, reliable progress in the UI.
-- **In-memory job manager**: Adequate for a single instance. Swap for Redis/Kafka when scaling horizontally.
-- **Shared reports volume**: Artifacts written by backend are immediately web-accessible (served by FastAPI in dev, Nginx in prod).
-- **Dev vs Prod**:
-  - Dev uses bind mounts and hot reload for rapid iteration.
-  - Prod builds immutable images (Angular build → Nginx static; FastAPI served by Uvicorn) for consistency and performance.
-- **Environment handling**: Backend ignores unrelated env vars and doesn’t auto-load `.env` to avoid collisions with Compose substitution files.
