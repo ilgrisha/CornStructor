@@ -1,5 +1,5 @@
 # File: backend/app/core/visualization/run_index_simple.py
-# Version: v1.2.0
+# Version: v1.3.0
 """
 Modern, grouped index page for a run, with a light "Apple-like" aesthetic.
 
@@ -8,6 +8,7 @@ Groups:
 - Tables     → fragments.csv, oligos.csv
 - Parameters → globals.json, levels.json
 - Visuals    → analysis.html, tree.html, GA progress, clusters
+- Bundle     → Download all (ZIP)
 """
 from __future__ import annotations
 
@@ -45,6 +46,10 @@ def write_run_index_simple(outdir: Path, job_id: str, *, reports_public_base: st
             return f'<a class="item" href="{base}/{fname}">{name}</a>'
         return f'<span class="item disabled">{name}</span>'
 
+    # Bundle link is always available because the API will generate it on the fly.
+    def link_bundle() -> str:
+        return f'<a class="btn primary" href="{base}/bundle.zip">Download all (ZIP)</a>'
+
     clusters_html = ""
     if clusters:
         cluster_links = "\n".join(
@@ -72,6 +77,9 @@ def write_run_index_simple(outdir: Path, job_id: str, *, reports_public_base: st
     --link: #0071e3;
     --border: #e5e5ea;
     --pill: #f2f2f7;
+    --btnbg: #e6f5ff;
+    --btnbg-hover: #d9efff;
+    --btnborder: #b6dfff;
   }}
   * {{ box-sizing: border-box; }}
   body {{
@@ -81,7 +89,7 @@ def write_run_index_simple(outdir: Path, job_id: str, *, reports_public_base: st
     font: 14px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }}
   .wrap {{ max-width: 1100px; margin: 0 auto; }}
-  header {{ margin: 8px 0 20px 0; }}
+  header {{ margin: 8px 0 20px 0; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }}
   h1 {{
     font-weight: 700; letter-spacing: -.02em; margin: 0 0 4px 0;
     font-size: 22px;
@@ -113,13 +121,36 @@ def write_run_index_simple(outdir: Path, job_id: str, *, reports_public_base: st
   }}
   .pill:hover {{ border-color: #c7c7cc; }}
   footer {{ margin-top: 22px; color: var(--sub); font-size: 12px; }}
+
+  .btn {{
+    display: inline-block;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--btnborder);
+    background: var(--btnbg);
+    color: #0b5cab;
+    text-decoration: none;
+    font-weight: 600;
+    transition: background .15s ease, transform .05s ease;
+  }}
+  .btn:hover {{ background: var(--btnbg-hover); }}
+  .btn:active {{ transform: translateY(1px); }}
+  .btn.primary {{
+    background: #d1fae5; border-color: #a7f3d0; color: #065f46;
+  }}
+  .btn.primary:hover {{ background: #a7f3d0; }}
 </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <h1>Report for run <code>{job_id}</code></h1>
-      <div class="sub">Quick access to exports and visualizations.</div>
+      <div>
+        <h1>Report for run <code>{job_id}</code></h1>
+        <div class="sub">Quick access to exports and visualizations.</div>
+      </div>
+      <div>
+        {link_bundle()}
+      </div>
     </header>
 
     <section class="grid">

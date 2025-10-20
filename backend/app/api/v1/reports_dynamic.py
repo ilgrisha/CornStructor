@@ -1,7 +1,11 @@
 # File: backend/app/api/v1/reports_dynamic.py
-# Version: v1.3.0
+# Version: v1.4.0
 """
 Dynamic reports router (no disk persistence required).
+
+v1.4.0:
+- Add route to download a ZIP bundle containing *all* rendered report artifacts:
+    GET /reports/{job_id}/bundle.zip
 
 v1.3.0:
 - Add routes for input.fasta and assembly.gb (GenBank).
@@ -9,6 +13,8 @@ v1.3.0:
 """
 from __future__ import annotations
 
+import io
+import zipfile
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
@@ -30,6 +36,14 @@ def _ensure_and_read(job_id: str, relpath: str, db: Session) -> Path:
     if not target.is_file():
         raise HTTPException(status_code=404, detail="Not Found")
     return target
+
+
+def _ensure_and_get_outdir(job_id: str, db: Session) -> Path:
+    """Render (if needed) and return the run's output directory."""
+    design = get_design_by_run(db, job_id)
+    if not design:
+        raise HTTPException(status_code=404, detail="Design not found for run")
+    return ensure_rendered(job_id=job_id, design=design)
 
 
 @router.get("/{job_id}/index.html")
@@ -123,3 +137,36 @@ def report_cluster_html(job_id: str, name: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid path")
     path = _ensure_and_read(job_id, f"clusters/{name}", db)
     return FileResponse(str(path), media_type="text/html; charset=utf-8")
+
+
+# -----------------------
+# NEW: ZIP bundle download
+# -----------------------
+
+@router.get("/{job_id}/bundle.zip")
+def report_bundle_zip(job_id: str, db: Session = Depends(get_db)):
+    """
+    Create and return a ZIP of the entire rendered report directory.
+    This is generated on-the-fly each time to guarantee freshness.
+    """
+    outdir = _ensure_and_get_outdir(job_id, db)
+    zip_path = outdir / "bundle.zip"
+
+    # Build zip in-memory then write to disk atomically to avoid partial reads
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for p in outdir.rglob("*"):
+            if not p.is_file():
+                continue
+            # Exclude the zip file itself if present
+            if p.name == "bundle.zip":
+                continue
+            # Keep paths inside the zip relative to the outdir root
+            arcname = p.relative_to(outdir).as_posix()
+            zf.write(p, arcname)
+    buf.seek(0)
+    zip_path.write_bytes(buf.read())
+
+    # Offer a nice filename in the download prompt
+    filename = f"{job_id}_report_bundle.zip"
+    return FileResponse(str(zip_path), media_type="application/zip", filename=filename)
