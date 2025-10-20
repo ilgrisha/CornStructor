@@ -11,9 +11,9 @@
     "hill_climb_period": 5,
     "hill_climb_junc": 2,
     "hill_climb_cands": 10,
-    "allowed_motif_scale": 1,
+    "allowed_motif_scale": 1.0,
     "enable_early_stop": true,
-    "early_stop_multiplier": 3
+    "early_stop_multiplier": 3.0
   },
   "cpu_workers_fraction": 0.9,
   "max_total_adjustment_rounds": 2,
@@ -21,10 +21,10 @@
   "division_adjust_step_bp": 5,
   "tm_method": "NN",
   "tm": {
-    "Na": 0,
-    "K": 50,
-    "Tris": 10,
-    "Mg": 2,
+    "Na": 0.0,
+    "K": 50.0,
+    "Tris": 10.0,
+    "Mg": 2.0,
     "dNTPs": 0.8,
     "dnac1": 500,
     "dnac2": 500,
