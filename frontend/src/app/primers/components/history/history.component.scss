@@ -1,26 +1,17 @@
 /* File: frontend/src/app/primers/components/history/history.component.scss */
-/* Version: v0.1.0 */
-.history {
-  .runs {
-    width: 100%;
-    border-collapse: collapse;
-
-    th, td {
-      text-align: left;
-      padding: 0.5rem;
-      border-bottom: 1px solid #eee;
-    }
-
-    .row {
-      cursor: pointer;
-    }
-
-    .row:hover {
-      background: #fafafa;
-    }
-  }
-
-  .error {
-    color: #b00020;
-  }
+/* Version: v0.2.0 */
+header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.btn{
+  border:1px solid #dadada;
+  background: linear-gradient(#ffffff,#f7f7f9);
+  color:#111827;
+  border-radius:10px;
+  padding:6px 12px;
+  font-size:12px;
+  cursor:pointer;
 }
+table { width:100%; border-collapse: collapse; }
+th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; font-size: 13px; }
+.empty { color:#666; }
+.loading { padding: 8px; }
+.error { color: #b00020; padding: 8px 0; }

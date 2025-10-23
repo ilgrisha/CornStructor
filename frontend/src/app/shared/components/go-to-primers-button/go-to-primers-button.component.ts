@@ -1,20 +1,10 @@
 // File: frontend/src/app/shared/components/go-to-primers-button/go-to-primers-button.component.ts
-// Version: v0.1.0
+// Version: v0.2.0
 /**
  * GoToPrimersButtonComponent
- * --------------------------
- * A drop-in button that:
- *  1) Saves the current Sequence + target window into SequenceSharedService
- *  2) Appends a message to the shared Log
- *  3) Navigates to /primers/design
- *
- * Usage (in Construction Tree template):
- * <app-go-to-primers-button
- *   [sequence]="sequenceText"
- *   [start]="selectedStart"
- *   [end]="selectedEnd"
- *   [name]="sequenceName">
- * </app-go-to-primers-button>
+ * - Shares sequence/start/end to SequenceSharedService
+ * - Logs the handoff
+ * - Navigates to /primers/design (with robust navigation)
  */
 import { Component, Input } from '@angular/core';
 import { Router } from '@angular/router';
@@ -27,24 +17,9 @@ import { LogBusService } from '../../../shared/services/log-bus.service';
   styleUrls: ['./go-to-primers-button.component.scss'],
 })
 export class GoToPrimersButtonComponent {
-  /**
-   * Full raw sequence (no FASTA header). If you have FASTA, strip headers before passing.
-   */
   @Input() sequence = '';
-
-  /**
-   * 1-based inclusive start coordinate (required to prefill the Primers tab).
-   */
-  @Input() start: number | null = null;
-
-  /**
-   * 1-based inclusive end coordinate (required to prefill the Primers tab).
-   */
-  @Input() end: number | null = null;
-
-  /**
-   * Optional display name for the sequence (e.g., FASTA header or record id).
-   */
+  @Input() start: number | null = null;  // 1-based inclusive
+  @Input() end: number | null = null;    // 1-based inclusive
   @Input() name: string | null = null;
 
   constructor(
@@ -53,7 +28,10 @@ export class GoToPrimersButtonComponent {
     private log: LogBusService
   ) {}
 
-  go() {
+  async go(ev?: Event) {
+    ev?.preventDefault();
+    ev?.stopPropagation();
+
     if (!this.sequence) {
       this.log.append('Primers: No sequence provided from Construction Tree.');
       return;
@@ -63,21 +41,25 @@ export class GoToPrimersButtonComponent {
       return;
     }
 
-    // Share sequence state
+    // Share state
     this.seqStore.set({
       sequence: this.sequence,
       start: this.start,
       end: this.end,
       name: this.name ?? null,
     });
-
-    // Log the transition
     this.log.append(
-      `Primers: Launching design for ${this.name ?? 'sequence'} ` +
-      `(${this.start}–${this.end}, length ${this.end - this.start + 1}).`
+      `Primers: Received "${this.name ?? 'sequence'}" (${this.start}–${this.end}, len ${this.end - this.start + 1}).`
     );
 
-    // Navigate to the Primers Design tab
-    this.router.navigate(['/primers/design']);
+    // Robust navigation attempt
+    try {
+      const ok = await this.router.navigateByUrl('/primers/design', { replaceUrl: false });
+      if (!ok) {
+        this.log.append('Primers: navigation to /primers/design failed (router returned false).');
+      }
+    } catch (e: any) {
+      this.log.append(`Primers: navigation error → ${e?.message ?? e}`);
+    }
   }
 }

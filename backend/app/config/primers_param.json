@@ -1,5 +1,3 @@
-# File: backend/app/config/primers_param.json
-# Version: v0.1.0
 {
   "primerLengthMin": 18,
   "primerLengthMax": 25,

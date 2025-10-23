@@ -1,18 +1,12 @@
 // File: frontend/src/app/features/run/run.component.ts
-// Version: v2.6.2
+// Version: v2.7.0
 /**
- * RunComponent (updated)
- * ----------------------
- * Fix: since this component is standalone, import non-standalone shared components via SharedModule.
- * - Replaces direct imports of GoToPrimersButtonComponent and SharedLogViewComponent with SharedModule.
- * - Removes unused SequenceSharedService injection.
- *
- * Keeps:
- * - Construction Tree workflow
- * - "Go to Primers" button
- * - Log mirroring to shared LogBusService
+ * RunComponent
+ * - Single shared log box: removes the local log pane and only shows SharedLogViewComponent.
+ * - Keeps mirroring Construction Tree logs into LogBusService so the Primers tab sees the same stream.
+ * - Keeps the Go to Primers button in the header.
  */
-import { Component, signal, effect, ViewChild, ElementRef, AfterViewInit, computed } from '@angular/core';
+import { Component, signal, effect, AfterViewInit, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../core/services/api.service';
 import { AnalysisService } from '../../core/services/analysis.service';
@@ -32,12 +26,8 @@ import { LogBusService } from '../../shared/services/log-bus.service';
   styleUrls: ['./run.component.css']
 })
 export class RunComponent implements AfterViewInit {
-  /** Modals */
   historyOpen = signal<boolean>(false);
   paramsOpen = signal<boolean>(false);
-
-  /** Scrollable logs container */
-  @ViewChild('logPane') logPane?: ElementRef<HTMLDivElement>;
 
   /** Mirror Construction Tree logs into shared Log bus */
   private prevLen = 0;
@@ -50,21 +40,9 @@ export class RunComponent implements AfterViewInit {
     }
   });
 
-  /** Auto-scroll the local log pane */
-  private autoScrollEffect = effect(() => {
-    const lines = this.api.logLines();
-    const _len = lines.length;
-    queueMicrotask(() => {
-      const el = this.logPane?.nativeElement;
-      if (el) el.scrollTop = el.scrollHeight;
-    });
-  });
-
-  /** Expose sequence & target window for the Primers button */
+  /** Expose sequence/name/start/end to Primers button */
   sequenceText = computed(() => this.a.sequence() ?? '');
   sequenceName = computed(() => this.deriveSequenceName());
-
-  /** Selected coordinates (1-based inclusive); fall back to full sequence if unspecified */
   selectedStart = computed(() => this.deriveStart());
   selectedEnd = computed(() => this.deriveEnd());
 
@@ -75,14 +53,8 @@ export class RunComponent implements AfterViewInit {
     private logBus: LogBusService
   ) {}
 
-  ngAfterViewInit(): void {
-    setTimeout(() => {
-      const el = this.logPane?.nativeElement;
-      if (el) el.scrollTop = el.scrollHeight;
-    }, 0);
-  }
+  ngAfterViewInit(): void {}
 
-  /** Start a new Construction Tree design run using current inputs + tree params. */
   run() {
     const req = {
       sequence: this.a.sequence(),
@@ -95,11 +67,9 @@ export class RunComponent implements AfterViewInit {
     this.api.startDesign(req);
   }
 
-  /** History modal */
   openHistory() { this.historyOpen.set(true); }
   closeHistory() { this.historyOpen.set(false); }
 
-  /** Parameters modal */
   openParameters() {
     this.paramsOpen.set(true);
     if (!this.tp.globals() || Object.keys(this.tp.globals()).length === 0) {
@@ -108,9 +78,6 @@ export class RunComponent implements AfterViewInit {
   }
   closeParameters() { this.paramsOpen.set(false); }
 
-  // ---- Helpers to derive start/end/name from existing services ----
-
-  /** Try to pull a friendly name for the sequence, otherwise fallback. */
   private deriveSequenceName(): string {
     const seq = this.a.sequence() ?? '';
     if (!seq) return 'sequence';
@@ -120,7 +87,6 @@ export class RunComponent implements AfterViewInit {
     return `sequence (${seq.length} nt)`;
   }
 
-  /** Try to read a selected start coordinate from TreeParamsService.globals().target.start (1-based). */
   private deriveStart(): number {
     const g = this.tp.globals?.();
     const seq = this.a.sequence() ?? '';
@@ -129,7 +95,6 @@ export class RunComponent implements AfterViewInit {
     return Math.max(1, Math.min(start, Math.max(1, seq.length)));
   }
 
-  /** Try to read a selected end coordinate from TreeParamsService.globals().target.end (1-based). */
   private deriveEnd(): number {
     const g = this.tp.globals?.();
     const seq = this.a.sequence() ?? '';

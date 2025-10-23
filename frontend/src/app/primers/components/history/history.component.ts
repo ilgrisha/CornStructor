@@ -1,14 +1,14 @@
 // File: frontend/src/app/primers/components/history/history.component.ts
-// Version: v0.1.0
+// Version: v0.3.0
 /**
- * HistoryComponent
- * ----------------
- * Displays table of prior primer design runs. Clicking a row opens the Report.
+ * HistoryComponent (Primers)
+ * --------------------------
+ * Non-standalone component (declared in PrimersModule) that lists recent primer design runs
+ * via PrimersService.listRuns(). Clicking a row navigates to /primers/runs/:id.
  */
-
 import { Component, OnInit } from '@angular/core';
-import { PrimersService } from '../../services/primers.service';
 import { PrimerRunRecord } from '../../models/primer-run.model';
+import { PrimersService } from '../../services/primers.service';
 import { Router } from '@angular/router';
 
 @Component({
@@ -17,27 +17,34 @@ import { Router } from '@angular/router';
   styleUrls: ['./history.component.scss'],
 })
 export class HistoryComponent implements OnInit {
-  runs: PrimerRunRecord[] = [];
   loading = false;
   error: string | null = null;
+  runs: PrimerRunRecord[] = [];
 
   constructor(private api: PrimersService, private router: Router) {}
 
   ngOnInit(): void {
+    this.fetch();
+  }
+
+  /** Refresh the runs list. */
+  fetch(): void {
     this.loading = true;
+    this.error = null;
     this.api.listRuns().subscribe({
       next: (data) => {
         this.runs = data;
         this.loading = false;
       },
       error: (err) => {
-        this.error = err?.error?.detail ?? 'Failed to load history.';
+        this.error = err?.error?.detail ?? 'Failed to load runs.';
         this.loading = false;
       },
     });
   }
 
-  openRun(run: PrimerRunRecord) {
-    this.router.navigate(['/primers/runs', run.id]);
+  /** Navigate to a specific run's report. */
+  open(id: string): void {
+    this.router.navigate(['/primers/runs', id]);
   }
 }
