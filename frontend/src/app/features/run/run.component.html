@@ -1,5 +1,5 @@
 <!-- File: frontend/src/app/features/run/run.component.html -->
-<!-- Version: v2.6.1 -->
+<!-- Version: v2.7.0 -->
 <div class="card">
   <div class="card-header">
     <div class="title">Construction tree design</div>
@@ -7,6 +7,15 @@
       <button class="btn" (click)="openHistory()">History</button>
       <button class="btn" (click)="openParameters()">Parameters</button>
       <button class="btn primary" (click)="run()">Start design</button>
+
+      <!-- NEW: Seamless navigation to Primers Design tab -->
+      <app-go-to-primers-button
+        class="btn"
+        [sequence]="sequenceText()"
+        [start]="selectedStart()"
+        [end]="selectedEnd()"
+        [name]="sequenceName()">
+      </app-go-to-primers-button>
     </div>
   </div>
 
@@ -19,9 +28,15 @@
     </a>
   </div>
 
-  <!-- Logs -->
+  <!-- Logs (local view) -->
   <div #logPane class="log-pane">
     <div *ngFor="let line of api.logLines()" class="log-line">{{ line }}</div>
+  </div>
+
+  <!-- NEW: Shared Log box (shows the same lines mirrored to Primers tab) -->
+  <div class="shared-log-wrapper">
+    <h4 class="shared-log-title">Shared Log</h4>
+    <app-shared-log-view></app-shared-log-view>
   </div>
 </div>
 

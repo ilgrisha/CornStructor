@@ -1,0 +1,20 @@
+/* File: frontend/src/app/shared/components/shared-log-view/shared-log-view.component.scss */
+/* Version: v0.1.0 */
+.shared-log {
+  background: #0f172a;
+  color: #e5e7eb;
+  border-radius: 8px;
+  min-height: 180px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px solid #1f2937;
+
+  pre {
+    margin: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+  }
+}

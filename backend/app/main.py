@@ -18,6 +18,10 @@ from backend.app.api.v1.api import api_router, public_router
 from backend.app.db.session import engine
 from backend.app.db.maintenance import ensure_schema_sqlite
 
+# ✅ Primers router
+from backend.app.api.v1.primers.router import router as primers_router
+
+
 app = FastAPI(title="CornStructor API", openapi_url="/api/openapi.json", docs_url="/api/docs")
 
 # CORS
@@ -28,6 +32,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ✅ Mount primers endpoints
+app.include_router(primers_router)
+
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
+
 
 # APIs under /api
 app.include_router(api_router, prefix="/api")

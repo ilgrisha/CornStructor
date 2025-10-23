@@ -1,0 +1,46 @@
+<!-- File: frontend/src/app/primers/components/primer-design/primer-design.component.html -->
+<!-- Version: v0.2.0 -->
+<section class="primer-design">
+  <header class="toolbar">
+    <h2>Primers Design</h2>
+    <div class="actions">
+      <button type="button" (click)="openHistory()">History</button>
+      <button type="button" (click)="openParameters()">Parameters</button>
+      <button type="button" [disabled]="designing" (click)="startDesign()">Start Design</button>
+      <button type="button" *ngIf="lastRunId" (click)="openReport()">Open Report</button>
+    </div>
+  </header>
+
+  <div class="content-grid">
+    <!-- Shared Sequence box -->
+    <div class="panel">
+      <h3>Sequence</h3>
+      <div class="seq-meta" *ngIf="seqName">Name: <strong>{{ seqName }}</strong></div>
+      <textarea class="sequence" [value]="sequence" readonly></textarea>
+
+      <div class="range-form">
+        <label>Start (1-based)
+          <input type="number" [formControl]="form.controls['start']" />
+        </label>
+        <label>End (1-based)
+          <input type="number" [formControl]="form.controls['end']" />
+        </label>
+        <div class="hint">Selected length: {{
+          (form.value.end && form.value.start) ? (form.value.end - form.value.start + 1) : 0
+        }}</div>
+      </div>
+    </div>
+
+    <!-- Shared Log box -->
+    <div class="panel">
+      <h3>Log</h3>
+      <app-shared-log-view></app-shared-log-view>
+    </div>
+  </div>
+
+  <!-- Parameters Modal -->
+  <app-primers-parameters-editor
+    [open]="paramsOpen"
+    (close)="closeParameters()">
+  </app-primers-parameters-editor>
+</section>

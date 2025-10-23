@@ -1,0 +1,29 @@
+<!-- File: frontend/src/app/primers/components/history/history.component.html -->
+<!-- Version: v0.1.0 -->
+<section class="history">
+  <header>
+    <h2>Primer Design History</h2>
+  </header>
+
+  <div *ngIf="loading">Loading…</div>
+  <div *ngIf="error" class="error">{{ error }}</div>
+
+  <table *ngIf="!loading && !error" class="runs">
+    <thead>
+      <tr>
+        <th>Created</th>
+        <th>Run ID</th>
+        <th>Target</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let r of runs" (click)="openRun(r)" class="row">
+        <td>{{ r.createdAt | date:'medium' }}</td>
+        <td><code>{{ r.id }}</code></td>
+        <td>{{ r.targetStart }}–{{ r.targetEnd }}</td>
+        <td>{{ r.status }}</td>
+      </tr>
+    </tbody>
+  </table>
+</section>

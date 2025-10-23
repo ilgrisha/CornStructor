@@ -1,0 +1,49 @@
+<!-- File: frontend/src/app/primers/components/parameters-editor/parameters-editor.component.html -->
+<!-- Version: v0.1.0 -->
+<div class="backdrop" *ngIf="open" (click)="onClose()"></div>
+<div class="modal" *ngIf="open">
+  <header>
+    <h3>Primer Design Parameters</h3>
+    <button class="icon" title="Close" (click)="onClose()">✕</button>
+  </header>
+
+  <div *ngIf="loading" class="loading">Loading…</div>
+  <div *ngIf="error" class="error">{{ error }}</div>
+
+  <form [formGroup]="form" *ngIf="!loading">
+    <div class="grid">
+      <label>Primer length min <input type="number" formControlName="primerLengthMin"></label>
+      <label>Primer length max <input type="number" formControlName="primerLengthMax"></label>
+      <label>Tm min (°C) <input type="number" formControlName="primerTmMin" step="0.1"></label>
+      <label>Tm max (°C) <input type="number" formControlName="primerTmMax" step="0.1"></label>
+      <label>GC min (%) <input type="number" formControlName="primerGCMin" step="0.1"></label>
+      <label>GC max (%) <input type="number" formControlName="primerGCMax" step="0.1"></label>
+      <label>Homopolymer max <input type="number" formControlName="primerHomopolymerMax"></label>
+      <label>3′ end length <input type="number" formControlName="primerThreePrimeEndLength"></label>
+      <label>3′ end primer match max <input type="number" formControlName="primerThreePrimePrimerMatchMax"></label>
+      <label>Target match max <input type="number" formControlName="primerTargetMatchMax"></label>
+      <label>Target match number max <input type="number" formControlName="primerTargetMatchNumberMax"></label>
+      <label>Secondary structure ΔG min <input type="number" formControlName="primerSecondaryStructureDeltaGMin" step="0.1"></label>
+      <label>Pair ΔTm max <input type="number" formControlName="primerTmDifferenceMax" step="0.1"></label>
+    </div>
+
+    <h4>Scoring Weights</h4>
+    <div class="grid" [formGroup]="form.controls['weights']">
+      <label>wTm <input type="number" formControlName="wTm" step="0.1"></label>
+      <label>wGC <input type="number" formControlName="wGC" step="0.1"></label>
+      <label>wDimer <input type="number" formControlName="wDimer" step="0.1"></label>
+      <label>w3p <input type="number" formControlName="w3p" step="0.1"></label>
+      <label>wOff <input type="number" formControlName="wOff" step="0.1"></label>
+    </div>
+
+    <div class="grid">
+      <label>Random seed <input type="number" formControlName="randomSeed"></label>
+    </div>
+
+    <footer class="actions">
+      <button type="button" class="btn" (click)="onClose()">Close</button>
+      <button type="button" class="btn primary" [disabled]="saving || form.invalid" (click)="save()">Save</button>
+      <span class="saved" *ngIf="saved">Saved ✓</span>
+    </footer>
+  </form>
+</div>

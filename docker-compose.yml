@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    container_name: cornstructor-backend
     environment:
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
       - OUTPUT_DIR=/data/out

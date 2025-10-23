@@ -1,0 +1,25 @@
+# File: backend/app/config/primers_param.json
+# Version: v0.1.0
+{
+  "primerLengthMin": 18,
+  "primerLengthMax": 25,
+  "primerTmMin": 55.0,
+  "primerTmMax": 62.0,
+  "primerGCMin": 40.0,
+  "primerGCMax": 65.0,
+  "primerHomopolymerMax": 4,
+  "primerThreePrimeEndLength": 5,
+  "primerThreePrimePrimerMatchMax": 2,
+  "primerTargetMatchMax": 5,
+  "primerTargetMatchNumberMax": 2,
+  "primerSecondaryStructureDeltaGMin": -9.0,
+  "primerTmDifferenceMax": 3.0,
+  "weights": {
+    "wTm": 1.0,
+    "wGC": 0.5,
+    "wDimer": 1.0,
+    "w3p": 1.25,
+    "wOff": 1.0
+  },
+  "randomSeed": null
+}
