@@ -19,5 +19,6 @@
     "w3p": 1.25,
     "wOff": 1.0
   },
-  "randomSeed": null
+  "randomSeed": 1,
+  "templateExact": true
 }

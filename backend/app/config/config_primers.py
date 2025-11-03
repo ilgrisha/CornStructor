@@ -1,18 +1,40 @@
 # File: backend/app/config/config_primers.py
-# Version: v0.1.0
+# Version: v0.2.0
 """
-Primer parameters configuration loader/saver.
+Primer parameters configuration loader/saver (strict, no legacy compatibility).
 
-- Reads default parameters from: backend/app/config/primers_param_default.json
-- Reads/writes current parameters from: backend/app/config/primers_param.json
-- Validates payloads with PrimerDesignParameters (Pydantic)
-- Exposes helper APIs for other modules and routers.
+- Reads defaults from: backend/app/config/primers_param_default.json
+- Reads/writes current from: backend/app/config/primers_param.json
+- Validates payloads with PrimerDesignParameters (Pydantic) from core/primer/parameters.py
 
 Usage:
-    from app.config.config_primers import load_current_params, save_current_params
+    from backend.app.config.config_primers import load_current_params, save_current_params
+
+Notes
+-----
+- This loader expects the new JSON schema (camelCase keys), for example:
+
+  {
+    "primerLengthMin": 18,
+    "primerLengthMax": 25,
+    "primerTmMin": 55.0,
+    "primerTmMax": 62.0,
+    "primerGCMin": 40.0,
+    "primerGCMax": 65.0,
+    "primerHomopolymerMax": 4,
+    "primerThreePrimeEndLength": 5,
+    "primerThreePrimePrimerMatchMax": 2,
+    "primerTargetMatchMax": 5,
+    "primerTargetMatchNumberMax": 2,
+    "primerSecondaryStructureDeltaGMin": -9.0,
+    "primerTmDifferenceMax": 3.0,
+    "weights": { "wTm": 1.0, "wGC": 0.5, "wDimer": 1.0, "w3p": 1.25, "wOff": 1.0 },
+    "randomSeed": null,
+    "templateExact": true
+  }
 
 Thread-safety:
-- Uses atomic writes via temporary file + replace to avoid partial writes.
+- Uses atomic writes (tmp + replace) to avoid partial/dirty writes.
 """
 
 from __future__ import annotations
@@ -55,7 +77,7 @@ def load_default_params() -> PrimerDesignParameters:
 
 def load_current_params(fallback_to_default: bool = True) -> PrimerDesignParameters:
     """
-    Load the current (editable) primer design parameters.
+    Load current (editable) primer design parameters.
     If file missing/invalid and fallback is True, return defaults.
     """
     payload = _read_json(CURRENT_FILE)
