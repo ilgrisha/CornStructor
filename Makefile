@@ -5,9 +5,9 @@
 # You can override these on the command line, e.g.:
 # make dev BACKEND_PORT=9000 FRONTEND_PORT_DEV=4300
 # make prod-up NGINX_PORT=9090
-BACKEND_PORT ?= 8000
-FRONTEND_PORT_DEV ?= 4200
-NGINX_PORT ?= 8080
+BACKEND_PORT ?= 8016
+FRONTEND_PORT_DEV ?= 4216
+NGINX_PORT ?= 8098
 CORS_ORIGINS ?= *
 COMPOSE_FILE_DEV := docker-compose.dev.yml
 COMPOSE_FILE_PROD := docker-compose.yml
