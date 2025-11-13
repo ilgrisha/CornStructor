@@ -1,82 +1,19 @@
 [
   {
     "level": 0,
-    "fragment_min_size": 8000,
-    "fragment_max_size": 10000,
-    "min_children": 2,
-    "max_children": 6,
+    "fragment_min_size": 300,
+    "fragment_max_size": 12000,
     "overlap_min_size": 30,
-    "overlap_max_size": 50,
-
-    "overlap_tm_min": null,
-    "overlap_tm_max": null,
-    "overlap_gc_min": null,
-    "overlap_gc_max": null,
-    "overlap_run_min": null,
-    "overlap_run_max": null,
-    "overlap_disallowed_motifs": [],
-    "overlap_allowed_motifs": {},
-
-    "max_gap_allowed": 10000
-  },
-  {
-    "level": 1,
-    "fragment_min_size": 4000,
-    "fragment_max_size": 6000,
-    "min_children": 2,
-    "max_children": 6,
-    "overlap_min_size": 30,
-    "overlap_max_size": 50,
-
-    "overlap_tm_min": null,
-    "overlap_tm_max": null,
+    "overlap_max_size": 47,
+    "min_children_size": 125,
+    "max_children_size": 170,
+    "overlap_tm_min": 72.2,
+    "overlap_tm_max": 88,
     "overlap_gc_min": 30,
-    "overlap_gc_max": 60,
-    "overlap_run_min": null,
-    "overlap_run_max": 7,
-    "overlap_disallowed_motifs": [],
-    "overlap_allowed_motifs": {},
-
-    "max_gap_allowed": 10000
-  },
-  {
-    "level": 2,
-    "fragment_min_size": 1000,
-    "fragment_max_size": 2000,
-    "min_children": 2,
-    "max_children": 6,
-    "overlap_min_size": 20,
-    "overlap_max_size": 35,
-
-    "overlap_tm_min": null,
-    "overlap_tm_max": null,
-    "overlap_gc_min": 40,
-    "overlap_gc_max": 60,
-    "overlap_run_min": null,
-    "overlap_run_max": 6,
-    "overlap_disallowed_motifs": [],
-    "overlap_allowed_motifs": {},
-
-    "max_gap_allowed": 10000
-  },
-  {
-    "level": 3,
-    "fragment_min_size": 80,
-    "fragment_max_size": 120,
-    "min_children": 2,
-    "max_children": 10,
-    "overlap_min_size": 22,
-    "overlap_max_size": 55,
-
-    "overlap_tm_min": 72,
-    "overlap_tm_max": 80,
-    "overlap_gc_min": 40,
-    "overlap_gc_max": 60,
-    "overlap_run_min": null,
+    "overlap_gc_max": 70,
     "overlap_run_max": 5,
-    "overlap_disallowed_motifs": [],
-    "overlap_allowed_motifs": {},
-
-    "max_gap_allowed": 10
-    }
+    "force_body_count_deduction": 3,
+    "enforce_even_children_count": true,
+    "body_max_safety_buffer": 15
+  }
 ]

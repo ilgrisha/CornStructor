@@ -1,0 +1,23 @@
+/* File: frontend/src/app/features/runs-history/runs-history.component.css */
+/* Version: v0.3.0 */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: grid; place-items: center; z-index: 1000; }
+.dialog { width: min(980px, 95vw); max-height: 90vh; overflow: hidden; background: #fff; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,.2); display: flex; flex-direction: column; }
+.header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #eee; }
+.close { border: none; background: transparent; font-size: 18px; cursor: pointer; }
+.toolbar { display: flex; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #f2f2f2; }
+.toolbar input { flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; }
+.toolbar button { padding: 8px 12px; }
+
+.list-scroll { overflow-y: auto; flex: 1; }
+.row { display: grid; grid-template-columns: 2fr 2fr 1fr 0.7fr 1fr 1fr; gap: 8px; align-items: center; padding: 10px 16px; border-bottom: 1px solid #f6f6f6; cursor: pointer; background: #fff; }
+.row:hover { background: #fafafa; }
+.header-row { position: sticky; top: 0; z-index: 1; font-weight: 600; color: #444; cursor: default; background: #fbfbfb; border-bottom: 1px solid #eee; }
+.cell.actions { display: flex; gap: 8px; justify-content: flex-end; }
+button.secondary { background: #fff; color: #c62828; border: 1px solid #ef9a9a; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+button.secondary:hover { background: #ffebee; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+.empty { padding: 24px; color: #777; }
+
+.sentinel { height: 1px; }
+.state { text-align: center; padding: 8px 0; color: #666; }
+.state.end { color: #999; }

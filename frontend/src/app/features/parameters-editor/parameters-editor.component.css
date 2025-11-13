@@ -1,0 +1,187 @@
+/* File: frontend/src/app/features/parameters-editor/parameters-editor.component.css */
+/* Version: v0.4.1 */
+
+/* ---------- Modal & shell (unchanged basics) ---------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.dialog {
+  background: #fff;
+  width: min(1100px, 96vw);
+  max-height: 92vh;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.25);
+  display: flex;
+  flex-direction: column;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #ececec;
+}
+.close {
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+}
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 18px;
+  border-bottom: 1px solid #f1f1f1;
+  gap: 12px;
+}
+.toolbar .btn, .btn {
+  border: 1px solid #ddd;
+  background: #fafafa;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn.tiny { padding: 3px 6px; font-size: 12px; }
+.btn.danger { color: #b00020; border-color: #f2c7cd; }
+.btn.subtle { background: #f7f7f7; }
+
+/* ---------- Panels layout: give Levels more width ---------- */
+.content {
+  display: grid;
+  grid-template-columns: 2fr 3fr; /* Globals : Levels = 40% : 60% */
+  gap: 14px;
+  padding: 14px 18px 18px;
+  overflow: hidden;
+}
+
+/* Stack on small screens */
+@media (max-width: 980px) {
+  .content { grid-template-columns: 1fr; }
+}
+
+.panel {
+  border: 1px solid #eee;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
+}
+.panel > h3 {
+  margin: 0; padding: 10px 12px;
+  background: #fbfbfb; border-bottom: 1px solid #f1f1f1;
+  font-weight: 600;
+}
+.panel-scroll {
+  padding: 12px;
+  overflow: auto;
+  flex: 1;
+}
+
+/* ---------- Generic row layout ---------- */
+.row {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  align-items: start;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px dotted #f0f0f0;
+}
+.row .label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px; color: #444;
+}
+.field {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+.json-wrap .json {
+  width: 100%;
+  min-height: 74px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+.json-wrap .json.invalid { border-color: #d33; background: #fff5f5; }
+.json-wrap .hint { color: #b00020; font-size: 12px; margin-top: 4px; }
+
+/* ---------- GA/TM cards ---------- */
+.group-card {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  margin: 10px 0;
+  overflow: hidden;
+}
+.group-header {
+  display: flex; align-items: center; gap: 10px;
+  background: #f7f7f7; border-bottom: 1px solid #eee; padding: 8px 10px;
+}
+.group-header.toggle {
+  width: 100%; justify-content: flex-start; cursor: pointer; border: 0; background: #f7f7f7;
+}
+.group-title { font-weight: 600; }
+.group-body { padding: 8px 10px; }
+.chev {
+  width: 10px; height: 10px;
+  border-right: 2px solid #777; border-bottom: 2px solid #777;
+  transform: rotate(-45deg); transition: transform .15s ease;
+}
+.chev.open { transform: rotate(45deg); }
+
+/* ---------- Levels column layout tweaks ---------- */
+.levels-body {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 12px;
+}
+.levels-list {
+  display: flex; flex-direction: column; gap: 8px; padding: 6px;
+  border-right: 1px solid #f1f1f1;
+}
+.level-item {
+  display: flex; justify-content: space-between; align-items: center;
+  border: 1px solid #eee; background: #fff; border-radius: 6px;
+  padding: 6px 8px; cursor: pointer;
+}
+.level-item.active { border-color: #bfe0ff; background: #f3f9ff; }
+.row-actions { display: flex; gap: 6px; }
+.editor-header { padding: 6px 8px; font-weight: 600; border-bottom: 1px solid #f3f3f3; }
+
+/* ---------- Make Globals inputs shorter, Levels inputs wider ---------- */
+.panel.globals .row {
+  grid-template-columns: 220px minmax(220px, 520px);
+}
+.panel.globals .field { max-width: 520px; }
+.panel.globals .json-wrap .json { max-width: 620px; }
+
+.panel.levels .row {
+  grid-template-columns: 200px 1fr;
+}
+.panel.levels .field,
+.panel.levels .json-wrap .json {
+  max-width: none;
+}
+
+/* ---------- Toggle switch ---------- */
+.switch { position: relative; display: inline-block; width: 36px; height: 20px; }
+.switch input { display: none; }
+.slider {
+  position: absolute; cursor: pointer; inset: 0;
+  background: #ccc; transition: .2s; border-radius: 20px;
+}
+.slider:before {
+  position: absolute; content: ""; height: 16px; width: 16px; left: 2px; top: 2px;
+  background: white; transition: .2s; border-radius: 50%;
+}
+.switch input:checked + .slider { background: #4caf50; }
+.switch input:checked + .slider:before { transform: translateX(16px); }

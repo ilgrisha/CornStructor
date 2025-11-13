@@ -1,0 +1,43 @@
+# File: docker-compose.dev.yml
+# Version: v0.8.0
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - OUTPUT_DIR=/data/out
+      - PYTHONPATH=/app
+      # Enable dev-only SQLite auto-heal at app startup.
+      - SCHEMA_AUTOHEAL=true
+      # Enable detailed error tracebacks in the console.
+      - PYTHONFAULTHANDLER=1
+      - UVICORN_LOG_LEVEL=${UVICORN_LOG_LEVEL:-debug}
+      - LOGLEVEL=${LOGLEVEL:-DEBUG}
+    volumes:
+      - reports:/data/out
+      - ./:/app:rw
+    command: uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      # Map container 8000 → host BACKEND_PORT (default 8000)
+      - "${BACKEND_PORT:-8000}:8000"
+
+  frontend:
+    image: node:20-bookworm
+    working_dir: /app
+    command: sh -c "npm install && npx ng serve --host 0.0.0.0 --port 4200 --proxy-config proxy.conf.json"
+    volumes:
+      - ./frontend:/app:rw
+      - node_modules:/app/node_modules
+    environment:
+      - NODE_OPTIONS=${NODE_OPTIONS:---max_old_space_size=4096}
+    ports:
+      # Map container 4200 → host FRONTEND_PORT_DEV (default 4200)
+      - "${FRONTEND_PORT_DEV:-4200}:4200"
+    depends_on:
+      - backend
+
+volumes:
+  reports:
+  node_modules:

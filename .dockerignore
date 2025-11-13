@@ -1,0 +1,22 @@
+# File: .dockerignore
+# Version: v0.1.0
+# Root-level ignore used when build context is "."
+.git
+.gitignore
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.venv
+.env
+.env.*
+node_modules
+frontend/.angular
+frontend/.cache
+frontend/dist
+backend/app/data
+backend/data
+/data

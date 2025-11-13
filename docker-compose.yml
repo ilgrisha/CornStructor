@@ -1,0 +1,32 @@
+# File: docker-compose.yml
+# Version: v0.4.0
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - OUTPUT_DIR=/data/out
+      # Explicitly disable auto-heal in non-dev compose.
+      - SCHEMA_AUTOHEAL=false
+    volumes:
+      - reports:/data/out
+    expose:
+      - "8000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    # Share the reports volume so Nginx can serve static /reports/
+    volumes:
+      - reports:/usr/share/nginx/html/reports
+    ports:
+      # Map container 8080 → host NGINX_PORT (default 8080)
+      - "${NGINX_PORT:-8080}:8080"
+    depends_on:
+      - backend
+
+volumes:
+  reports:

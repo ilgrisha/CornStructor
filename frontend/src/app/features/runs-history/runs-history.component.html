@@ -1,0 +1,59 @@
+<!-- File: frontend/src/app/features/runs-history/runs-history.component.html -->
+<!-- Version: v0.3.2 -->
+<div class="modal" *ngIf="open">
+  <div class="dialog">
+    <div class="header">
+      <h2>Previous runs</h2>
+      <button class="close" (click)="close.emit()">✕</button>
+    </div>
+
+    <div class="toolbar">
+      <input [(ngModel)]="search" (keyup.enter)="onSearch()" placeholder="Search by Job ID…" />
+      <button (click)="onSearch()">Search</button>
+    </div>
+
+    <div class="list-scroll" #scrollHost>
+      <div class="row header-row">
+        <div class="cell when">When</div>
+        <div class="cell job">Job ID</div>
+        <div class="cell status">Status</div>
+        <div class="cell len">Len</div>
+        <div class="cell report">Report</div>
+        <div class="cell actions">Actions</div>
+      </div>
+
+      <ng-container *ngIf="items().length || loadingFirst(); else empty">
+        <div
+          class="row"
+          *ngFor="let r of items(); trackBy: trackByJob"
+          (click)="loadDesign.emit(r.job_id)"
+        >
+          <div class="cell when">{{ r.created_at | date:'medium' }}</div>
+          <div class="cell job mono">{{ r.job_id }}</div>
+          <div class="cell status">{{ r.status }}</div>
+          <div class="cell len">{{ r.sequence_len || '—' }}</div>
+          <div class="cell report">
+            <a *ngIf="r.report_url" [href]="r.report_url" target="_blank" rel="noopener">Open</a>
+            <span *ngIf="!r.report_url">Pending…</span>
+          </div>
+          <div class="cell actions">
+            <!-- Pass the click event so we can stop propagation inside onDelete -->
+            <button class="secondary" (click)="onDelete(r, $event)">Delete</button>
+          </div>
+        </div>
+
+        <div class="sentinel" #sentinel></div>
+
+        <div class="state" *ngIf="loadingMore()">Loading more…</div>
+        <div class="state end" *ngIf="!hasMore()">End of list</div>
+      </ng-container>
+    </div>
+  </div>
+</div>
+
+<ng-template #empty>
+  <div class="empty">
+    <div *ngIf="loadingFirst()">Loading…</div>
+    <div *ngIf="!loadingFirst()">No runs found.</div>
+  </div>
+</ng-template>

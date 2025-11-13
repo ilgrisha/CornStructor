@@ -1,0 +1,40 @@
+/* ============================================================================
+ * Path: frontend/src/app/features/home/home.component.css
+ * Version: v2.3.0
+ * ============================================================================
+ * Two-column layout:
+ * - Left column is narrow (260–360px), stacked cards
+ * - Right column fills the rest, stacks Sequence then Construction tree
+ * ==========================================================================*/
+.shell{display:flex;flex-direction:column;gap:12px;padding:12px}
+.topbar h1{margin:0;font-size:18px;color:#0f172a}
+
+.content{
+  display:grid;
+  gap:12px;
+  grid-template-columns:minmax(260px,360px) 1fr;
+  align-items:start;
+}
+
+/* Left column: vertical stack */
+.left{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  min-width:0;
+}
+
+/* Right column: Sequence first, then Construction tree */
+.right{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  min-width:0;
+}
+
+/* Small screens: stack columns */
+@media (max-width: 900px){
+  .content{
+    grid-template-columns:1fr;
+  }
+}
