@@ -21,6 +21,7 @@ Tune N/M/K and sequence lengths to your real workloads.
 from __future__ import annotations
 
 import random
+random.seed(7)
 import string
 import time
 from statistics import mean

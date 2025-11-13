@@ -29,6 +29,7 @@ __all__ = ["GAOverlapSelector", "NoOverlapCandidatesError"]
 import logging
 import multiprocessing
 import random
+random.seed(7)
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, fields
 from statistics import mean, median, pstdev
