@@ -3,25 +3,11 @@
 <div class="modal" *ngIf="open">
   <div class="dialog">
     <div class="header">
-      <h2>Construction tree parameters</h2>
+      <div class="title-stack">
+        <h2>Construction tree parameters</h2>
+        <button class="btn inline" (click)="onReloadDefaults()">Reload defaults</button>
+      </div>
       <button class="close" (click)="close.emit()" aria-label="Close">✕</button>
-    </div>
-
-    <div class="toolbar">
-      <div class="left">
-        <button class="btn" (click)="onReloadDefaults()">Reload defaults</button>
-      </div>
-      <div class="right">
-        <label class="import btn">
-          <input type="file" accept="application/json" (change)="onImportGlobals($event)"> Import Globals
-        </label>
-        <button class="btn" (click)="exportGlobals()">Export Globals</button>
-        <span class="sep"></span>
-        <label class="import btn">
-          <input type="file" accept="application/json" (change)="onImportLevels($event)"> Import Levels
-        </label>
-        <button class="btn" (click)="exportLevels()">Export Levels</button>
-      </div>
     </div>
 
     <!-- Scrollable content area -->
@@ -29,6 +15,12 @@
       <!-- Globals -->
       <section class="panel globals">
         <h3>Globals</h3>
+        <div class="panel-actions globals-actions">
+          <label class="import btn">
+            <input type="file" accept="application/json" (change)="onImportGlobals($event)"> Import Globals
+          </label>
+          <button class="btn" (click)="exportGlobals()">Export Globals</button>
+        </div>
         <div class="panel-scroll">
           <!-- Regular globals (skip 'ga' and 'tm'; handled below) -->
           <div class="row" *ngFor="let kv of tp.globals() | keyvalue">
@@ -165,7 +157,13 @@
       <!-- Levels -->
       <section class="panel levels">
         <h3>Levels</h3>
-        <div class="levels-body">
+        <div class="panel-actions levels-actions">
+          <label class="import btn">
+            <input type="file" accept="application/json" (change)="onImportLevels($event)"> Import Levels
+          </label>
+          <button class="btn" (click)="exportLevels()">Export Levels</button>
+        </div>
+        <div class="levels-body panel-scroll">
           <aside class="levels-list">
             <button class="btn subtle add" (click)="onAddLevel()">+ Add level</button>
 
