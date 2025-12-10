@@ -17,6 +17,7 @@ DB_USER ?= appuser
 DB_NAME ?= cornstructor-db
 DB_VOLUME ?= cornstructor_dbdata
 CORS_ORIGINS ?= *
+LOG_TAIL ?= 200
 COMPOSE_FILE_DEV := docker-compose.dev.yml
 COMPOSE_FILE_PROD := docker-compose.yml
 # Optional: allow multiple concurrent stacks by project name
@@ -46,7 +47,7 @@ help:
 	@echo "  dev / dev-down             - start/stop live-reload dev stack (foreground)"
 	@echo "  prod-build / prod-up / prod-down - manage production stack"
 	@echo "  up/down/restart/build*     - generic compose controls (use MODE=dev|prod)"
-	@echo "  logs*/ps                   - inspect services for the selected MODE"
+	@echo "  logs*/ps                   - inspect services for the selected MODE (override LOG_TAIL=all)"
 	@echo "  backend-shell/frontend-shell- open shells inside running containers"
 	@echo "  db-* / migrate*             - database + Alembic helpers (require db service)"
 	@echo "  lint-*/fmt-*/test-*         - quality commands (containerized)"
@@ -105,13 +106,13 @@ ps:
 	$(COMPOSE) ps
 
 logs:
-	$(COMPOSE) logs -f --tail=200
+	$(COMPOSE) logs -f --tail=$(LOG_TAIL)
 
 logs-backend:
-	$(COMPOSE) logs -f backend
+	$(COMPOSE) logs -f --tail=$(LOG_TAIL) backend
 
 logs-frontend:
-	$(COMPOSE) logs -f frontend
+	$(COMPOSE) logs -f --tail=$(LOG_TAIL) frontend
 
 backend-shell:
 	$(COMPOSE) exec backend /bin/bash || \
