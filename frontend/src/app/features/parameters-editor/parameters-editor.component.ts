@@ -8,8 +8,8 @@
  * - Alias support for levels keys:
  *     overlap_tm_min  <-> overlap_min_tm
  *     overlap_tm_max  <-> overlap_max_tm
- *   On import/edit/export, we mirror both aliases to minimize backend changes.
- * - Export now serializes levels with mirrored aliases to maximize compatibility.
+ *   We still ingest either spelling but always store/export the canonical names
+ *   (overlap_tm_min / overlap_tm_max) to avoid duplicate rows in the UI.
  * - Safer number parsing and nullish handling.
  */
 import { Component, Input, Output, EventEmitter, signal } from '@angular/core';
@@ -41,6 +41,15 @@ export class ParametersEditorComponent {
   /** Validation error states for JSON editors */
   globalJsonErrs: ErrMap = {};
   levelJsonErrs: Record<number, ErrMap> = {};
+  /** Friendly overrides for terse keys. */
+  private labelOverrides: Record<string, string> = {
+    ga: 'Genetic Algorithm',
+    overlap_run_max: 'Overlap Max Homopolymer',
+    max_children_size: 'Children Max Length',
+    min_children_size: 'Children Min Length',
+    fragment_max_size: 'Fragment Max Length',
+    fragment_min_size: 'Fragment Min Length'
+  };
 
   constructor(public tp: TreeParamsService) {}
 
@@ -75,28 +84,25 @@ export class ParametersEditorComponent {
   }
 
   // ---------- Alias helpers (Levels) ----------
-  /** Mirror known alias pairs into the same object without overwriting explicit values. */
-  private mirrorLevelAliases(row: JsonObject): JsonObject {
+  /** Normalize overlap Tm alias pairs to the canonical names (drop legacy keys). */
+  private normalizeLevelAliases(row: JsonObject): JsonObject {
     const out = { ...row };
+    const syncAlias = (primary: string, alias: string) => {
+      const hasPrimary = Object.prototype.hasOwnProperty.call(out, primary);
+      const hasAlias = Object.prototype.hasOwnProperty.call(out, alias);
+      if (!hasPrimary && hasAlias) out[primary] = out[alias];
+      if (hasAlias) delete out[alias];
+    };
 
-    // tm min
-    const vMinA = out['overlap_tm_min'];
-    const vMinB = out['overlap_min_tm'];
-    if (vMinA !== undefined && vMinB === undefined) out['overlap_min_tm'] = vMinA;
-    if (vMinB !== undefined && vMinA === undefined) out['overlap_tm_min'] = vMinB;
-
-    // tm max
-    const vMaxA = out['overlap_tm_max'];
-    const vMaxB = out['overlap_max_tm'];
-    if (vMaxA !== undefined && vMaxB === undefined) out['overlap_max_tm'] = vMaxA;
-    if (vMaxB !== undefined && vMaxA === undefined) out['overlap_tm_max'] = vMaxB;
+    syncAlias('overlap_tm_min', 'overlap_min_tm');
+    syncAlias('overlap_tm_max', 'overlap_max_tm');
 
     return out;
   }
 
-  /** Normalize an entire levels array (apply alias mirroring to every row). */
+  /** Normalize an entire levels array (apply alias normalization to every row). */
   private normalizeLevelsArray(arr: JsonArray): JsonArray {
-    return (arr || []).map((row: any) => this.mirrorLevelAliases(row ?? {}));
+    return (arr || []).map((row: any) => this.normalizeLevelAliases(row ?? {}));
   }
 
   // ---------- Import / Export ----------
@@ -151,7 +157,7 @@ export class ParametersEditorComponent {
   }
 
   exportLevels()  {
-    // Export with alias mirroring to satisfy both new and old keys.
+    // Export with alias normalization to satisfy both new and old keys.
     const levels = this.normalizeLevelsArray(this.tp.levels());
     this.download('levels.json', JSON.stringify(levels, null, 2));
   }
@@ -224,8 +230,8 @@ export class ParametersEditorComponent {
     }
 
     const updated = { ...current, [key]: v };
-    const mirrored = this.mirrorLevelAliases(updated);
-    this.setLevelRow(idx, mirrored);
+    const normalized = this.normalizeLevelAliases(updated);
+    this.setLevelRow(idx, normalized);
   }
 
   onLevelJsonChange(idx: number, key: string, text: string) {
@@ -235,8 +241,8 @@ export class ParametersEditorComponent {
       this.levelJsonErrs[idx][key] = null;
       const current = { ...(this.tp.levels()[idx] ?? {}) };
       const updated = { ...current, [key]: parsed };
-      const mirrored = this.mirrorLevelAliases(updated);
-      this.setLevelRow(idx, mirrored);
+      const normalized = this.normalizeLevelAliases(updated);
+      this.setLevelRow(idx, normalized);
     } catch {
       this.levelJsonErrs[idx][key] = 'Invalid JSON';
     }
@@ -260,7 +266,7 @@ export class ParametersEditorComponent {
   onSelectLevel(i: number) { this.sel.set(i); }
   onReloadDefaults() {
     this.tp.loadDefaults();
-    // Alias-mirror current levels after reload (in case defaults use either naming)
+    // Alias-normalize current levels after reload (in case defaults use either naming)
     const arr = this.normalizeLevelsArray(this.tp.levels());
     this.tp.levels.set(arr);
     this.globalJsonErrs = {};
@@ -280,4 +286,17 @@ export class ParametersEditorComponent {
   }
   gaValue(key: string): any { return (this.tp.globals().ga ?? {})[key]; }
   tmValue(key: string): any { return (this.tp.globals().tm ?? {})[key]; }
+
+  /** Convert snake_case keys into Title Case labels for the UI. */
+  formatLabel(key: string | number): string {
+    if (key === null || key === undefined) return '';
+    const text = String(key);
+    const normalized = text.toLowerCase();
+    if (this.labelOverrides[normalized]) return this.labelOverrides[normalized];
+    return text
+      .split(/[_\s]+/)
+      .filter(Boolean)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  }
 }
