@@ -69,6 +69,28 @@
     </div>
   </div>
 
+  <div class="fragment-details" *ngIf="a.designFragmentSelection() as frag">
+    <div class="details-header">
+      {{ fragmentLabel(frag) }} {{ frag.id }}
+      <span class="badge" *ngIf="frag.isOligo">Oligo</span>
+      <span class="badge secondary" *ngIf="!frag.isOligo">Fragment</span>
+    </div>
+    <div class="details-grid">
+      <div>Level</div>
+      <div>L{{ frag.level }}</div>
+      <div>Strand</div>
+      <div>{{ frag.strand }}</div>
+      <div>Length</div>
+      <div>{{ frag.length }} bp</div>
+      <div>Coordinates</div>
+      <div>{{ frag.start + 1 }} – {{ frag.end }}</div>
+      <div>Left overlap</div>
+      <div>{{ frag.overlapPrev.length || 0 }} bp · {{ formatTm(frag.overlapPrevTm) }}</div>
+      <div>Right overlap</div>
+      <div>{{ frag.overlapNext.length || 0 }} bp · {{ formatTm(frag.overlapNextTm) }}</div>
+    </div>
+  </div>
+
   <div #viz class="viz" tabindex="0"
        (click)="focusViz()"
        (keydown)="onVizKeydown($event)"
@@ -117,18 +139,36 @@
 
         <!-- Design overlay: sense -->
         <div class="grid bars design sense"
-             *ngIf="a.designOverlayVisible()"
-             [style.gridTemplateColumns]="'repeat(' + ln.barSense.length + ', 1ch)'">
-          <span *ngFor="let on of ln.barSense" class="barcell"
-                [style.background]="on ? senseBarColor : 'transparent'"></span>
+             *ngIf="a.designOverlayVisible() && ln.senseSegments.length"
+             [style.gridTemplateColumns]="'repeat(' + ln.len + ', 1ch)'">
+          <button type="button"
+                  *ngFor="let seg of ln.senseSegments"
+                  class="barcell segment"
+                  [class.selected]="a.designFragmentSelection()?.id === seg.fragment.id"
+                  [style.gridColumn]="(seg.startCol + 1) + ' / ' + (seg.endCol + 1)"
+                  [style.background]="senseBarColor"
+                  [title]="segmentTooltip(seg.fragment)"
+                  [attr.data-frag-label]="seg.fragment.id"
+                  [attr.aria-label]="segmentTooltip(seg.fragment)"
+                  (click)="onFragmentSegmentClick(seg.fragment, $event)">
+          </button>
         </div>
 
         <!-- Design overlay: antisense -->
         <div class="grid bars design antisense"
-             *ngIf="a.designOverlayVisible()"
-             [style.gridTemplateColumns]="'repeat(' + ln.barAntisense.length + ', 1ch)'">
-          <span *ngFor="let on of ln.barAntisense" class="barcell"
-                [style.background]="on ? antisenseBarColor : 'transparent'"></span>
+             *ngIf="a.designOverlayVisible() && ln.antisenseSegments.length"
+             [style.gridTemplateColumns]="'repeat(' + ln.len + ', 1ch)'">
+          <button type="button"
+                  *ngFor="let seg of ln.antisenseSegments"
+                  class="barcell segment"
+                  [class.selected]="a.designFragmentSelection()?.id === seg.fragment.id"
+                  [style.gridColumn]="(seg.startCol + 1) + ' / ' + (seg.endCol + 1)"
+                  [style.background]="antisenseBarColor"
+                  [title]="segmentTooltip(seg.fragment)"
+                  [attr.data-frag-label]="seg.fragment.id"
+                  [attr.aria-label]="segmentTooltip(seg.fragment)"
+                  (click)="onFragmentSegmentClick(seg.fragment, $event)">
+          </button>
         </div>
 
         <!-- Selected range -->

@@ -17,19 +17,26 @@ import {
   ViewChild, ElementRef, AfterViewInit, OnDestroy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { AnalysisService, FeatureRegion, DesignOverlayMode, DesignLevelStat } from '../../core/services/analysis.service';
+import { AnalysisService, FeatureRegion, DesignOverlayMode, DesignLevelStat, DesignFragmentRange } from '../../core/services/analysis.service';
 
 type Cell = { ch: string; cls: string; abs: number };
 type Line = {
   start: number;
+  len: number;
   cells: Cell[];
   tick: boolean[];
   ruler: string[];
   barAll: boolean[];
   barSel: boolean[];
-  barSense: boolean[];
-  barAntisense: boolean[];
   caret: boolean[];   // len+1; true where caret should be drawn for this line
+  senseSegments: OverlaySegment[];
+  antisenseSegments: OverlaySegment[];
+};
+
+type OverlaySegment = {
+  startCol: number;
+  endCol: number;
+  fragment: DesignFragmentRange;
 };
 
 @Component({
@@ -73,17 +80,18 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
   selRanges = this.a.selectedRegions;
   selRange = this.a.selectedRange;
 
-  lines = computed<Line[]>(() =>
-    this.buildLines(
+  lines = computed<Line[]>(() => {
+    const showDesign = this.a.designOverlayVisible();
+    return this.buildLines(
       this.a.sequence().toUpperCase(),
       this.selRanges(),
       this.selRange(),
       this.lineWidth(),
       this.cursorPos(),   // include caret so we recompute when it moves
-      this.a.designOverlayRangesSense(),
-      this.a.designOverlayRangesAntisense()
-    )
-  );
+      showDesign ? this.a.designOverlayFragmentsSense() : [],
+      showDesign ? this.a.designOverlayFragmentsAntisense() : []
+    );
+  });
 
   // ---------- selection helpers ----------
   isSelected(abs: number): boolean {
@@ -134,6 +142,25 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
 
   clearDesignOverlaySelection() {
     this.a.setDesignOverlayLevel(null);
+    this.a.selectDesignFragment(null);
+  }
+
+  onFragmentSegmentClick(fragment: DesignFragmentRange, ev: MouseEvent) {
+    ev.stopPropagation();
+    this.a.selectDesignFragment(fragment);
+  }
+
+  fragmentLabel(fragment: DesignFragmentRange): string {
+    return fragment.isOligo ? 'Oligo' : 'Fragment';
+  }
+
+  formatTm(tm: number | null): string {
+    if (tm == null || Number.isNaN(tm)) return '—';
+    return `${tm.toFixed(1)} °C`;
+  }
+
+  segmentTooltip(fragment: DesignFragmentRange): string {
+    return `${this.fragmentLabel(fragment)} ${fragment.id} (${fragment.length} bp)`;
   }
 
   focusViz() { this.viz.nativeElement.focus(); }
@@ -376,14 +403,35 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
     return out;
   }
 
+  private buildOverlaySegments(
+    start0: number,
+    len: number,
+    frags: DesignFragmentRange[]
+  ): OverlaySegment[] {
+    if (!frags.length) return [];
+    const lineEnd = start0 + len;
+    const segments: OverlaySegment[] = [];
+    for (const frag of frags) {
+      const segStart = Math.max(start0, frag.start);
+      const segEnd = Math.min(lineEnd, frag.end);
+      if (segStart >= segEnd) continue;
+      segments.push({
+        startCol: segStart - start0,
+        endCol: segEnd - start0,
+        fragment: frag,
+      });
+    }
+    return segments;
+  }
+
   private buildLines(
     seq: string,
     ranges: FeatureRegion[],
     selected: FeatureRegion | null,
     lineW: number,
     caretAbs: number,
-    senseRanges: { start: number; end: number }[],
-    antisenseRanges: { start: number; end: number }[]
+    senseFragments: DesignFragmentRange[],
+    antisenseFragments: DesignFragmentRange[]
   ): Line[] {
     const out: Line[] = [];
     for (let i = 0; i < seq.length; i += lineW) {
@@ -398,14 +446,15 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
 
       out.push({
         start: i,
+        len,
         cells,
         tick: this.buildTickFlags(i, len),
         ruler: this.buildRulerChars(i, len),
         barAll: this.paintBar(i, len, ranges),
         barSel: this.paintSingle(i, len, selected),
-        barSense: this.paintBar(i, len, senseRanges),
-        barAntisense: this.paintBar(i, len, antisenseRanges),
-        caret: caretArr
+        caret: caretArr,
+        senseSegments: this.buildOverlaySegments(i, len, senseFragments),
+        antisenseSegments: this.buildOverlaySegments(i, len, antisenseFragments),
       });
     }
     // Edge case: empty sequence → still no lines (caret handled by placeholder)
