@@ -10,6 +10,17 @@
     </div>
   </div>
 
+  <div class="note-row">
+    <label for="runNote">Run description</label>
+    <input
+      id="runNote"
+      type="text"
+      maxlength="255"
+      [(ngModel)]="runDescription"
+      placeholder="Optional short note to recognize this run"
+    />
+  </div>
+
   <!-- Single result button (no list) -->
   <div class="result-bar" *ngIf="api.resultIndexLink()">
     <a class="result-primary"
@@ -26,7 +37,11 @@
 </div>
 
 <!-- History modal -->
-<app-runs-history [open]="historyOpen()" (close)="closeHistory()"></app-runs-history>
+<app-runs-history
+  [open]="historyOpen()"
+  (close)="closeHistory()"
+  (loadDesign)="onLoadDesignFromHistory($event)">
+</app-runs-history>
 
 <!-- Parameters modal -->
 <app-parameters-editor [open]="paramsOpen()" (close)="closeParameters()"></app-parameters-editor>

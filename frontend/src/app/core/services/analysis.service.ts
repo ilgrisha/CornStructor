@@ -55,6 +55,29 @@ export interface AnalysisParams {
   stemMergeMaxGap: number;
 }
 
+export type DesignOverlayMode = 'fragments' | 'oligos';
+
+export interface DesignFragmentRange {
+  id: string;
+  level: number;
+  start: number;
+  end: number;
+  isOligo: boolean;
+  strand: '+' | '-';
+  sequence: string;
+  length: number;
+  overlapPrev: string;
+  overlapNext: string;
+  overlapPrevTm: number | null;
+  overlapNextTm: number | null;
+}
+
+export interface DesignLevelStat {
+  level: number;
+  fragments: number;
+  oligos: number;
+}
+
 const API_BASE = '/api';
 
 @Injectable({ providedIn: 'root' })
@@ -358,6 +381,212 @@ export class AnalysisService {
   }
   selectRange(r: FeatureRegion | null) {
     this.selectedRange.set(r);
+  }
+
+  // ---- design overlay (fragments / oligos) ----
+  private designFragments = signal<DesignFragmentRange[]>([]);
+  private designReference = signal<string | null>(null);
+  designOverlayLevel: WritableSignal<number | null> = signal<number | null>(null);
+  designOverlayMode: WritableSignal<DesignOverlayMode> = signal<DesignOverlayMode>('fragments');
+  private selectedDesignFragment = signal<DesignFragmentRange | null>(null);
+  designFragmentSelection = computed(() => this.selectedDesignFragment());
+
+  designLevelStats = computed<DesignLevelStat[]>(() => {
+    const stats = new Map<number, DesignLevelStat>();
+    for (const frag of this.designFragments()) {
+      let entry = stats.get(frag.level);
+      if (!entry) {
+        entry = { level: frag.level, fragments: 0, oligos: 0 };
+        stats.set(frag.level, entry);
+      }
+      if (frag.isOligo) entry.oligos += 1;
+      else entry.fragments += 1;
+    }
+    return Array.from(stats.values()).sort((a, b) => a.level - b.level);
+  });
+
+  private designReferenceMatches = computed(() => {
+    const ref = this.designReference();
+    if (!ref) return false;
+    const seq = (this.sequence() || '').toUpperCase();
+    return seq === ref;
+  });
+
+  designOverlayAvailable = computed(() => this.designFragments().length > 0);
+  designOverlayControlsEnabled = computed(
+    () => this.designOverlayAvailable() && this.designReferenceMatches()
+  );
+
+  private filterDesignFragments(
+    strand: '+' | '-'
+  ): DesignFragmentRange[] {
+    if (!this.designOverlayControlsEnabled()) return [];
+    const level = this.designOverlayLevel();
+    if (level === null) return [];
+    const mode = this.designOverlayMode();
+    return this.designFragments().filter(
+      (frag) =>
+        frag.level === level &&
+        (mode === 'oligos' ? frag.isOligo : !frag.isOligo) &&
+        frag.strand === strand
+    );
+  }
+
+  designOverlayFragmentsSense = computed<DesignFragmentRange[]>(() => this.filterDesignFragments('+'));
+  designOverlayFragmentsAntisense = computed<DesignFragmentRange[]>(() => this.filterDesignFragments('-'));
+
+  designOverlayVisible = computed(
+    () =>
+      this.designOverlayControlsEnabled() &&
+      this.designOverlayLevel() !== null &&
+      (this.designOverlayFragmentsSense().length > 0 || this.designOverlayFragmentsAntisense().length > 0)
+  );
+
+  designOverlayDisabledReason = computed<string | null>(() => {
+    if (!this.designOverlayAvailable()) return null;
+    if (!this.designReferenceMatches()) {
+      return 'Design overlay disabled: sequence differs from the loaded design reference.';
+    }
+    return null;
+  });
+
+  private overlaySelectionGuard = effect(
+    () => {
+      if (!this.designOverlayControlsEnabled()) {
+        this.selectedDesignFragment.set(null);
+      }
+    },
+    { allowSignalWrites: true }
+  );
+
+  applyDesignResult(sequence: string, treeJson: string | null) {
+    const cleaned = (sequence || '').replace(/[^ACGTacgt]/g, '').toUpperCase();
+    this.sequence.set(cleaned);
+    this.designReference.set(cleaned);
+    this.syncDesignOverlay(treeJson);
+  }
+
+  setDesignOverlayLevel(level: number | null) {
+    this.designOverlayLevel.set(level);
+    this.selectedDesignFragment.set(null);
+  }
+
+  setDesignOverlayMode(mode: DesignOverlayMode) {
+    this.designOverlayMode.set(mode);
+    this.selectedDesignFragment.set(null);
+  }
+
+  clearDesignOverlayData() {
+    this.designFragments.set([]);
+    this.designOverlayLevel.set(null);
+    this.designOverlayMode.set('fragments');
+    this.designReference.set(null);
+    this.selectedDesignFragment.set(null);
+  }
+
+  selectDesignFragment(fragment: DesignFragmentRange | null) {
+    this.selectedDesignFragment.set(fragment);
+  }
+
+  private syncDesignOverlay(treeJson: string | null) {
+    if (!treeJson) {
+      this.designFragments.set([]);
+      this.designOverlayLevel.set(null);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(treeJson);
+      const root = parsed?.tree ?? parsed;
+      if (!root) {
+        this.designFragments.set([]);
+        this.designOverlayLevel.set(null);
+        return;
+      }
+
+      const stack: any[] = [root];
+      const collected: DesignFragmentRange[] = [];
+
+      while (stack.length) {
+        const node = stack.pop();
+        if (!node) continue;
+        const level = typeof node.level === 'number' ? node.level : 0;
+        const start = typeof node.start === 'number' ? node.start : 0;
+        const end = typeof node.end === 'number' ? node.end : start;
+        const id = typeof node.fragment_id === 'string' ? node.fragment_id : '';
+        const isOligo = Boolean(node.is_oligo);
+        const strand = node.strand === '-' ? '-' : '+';
+        const seqRaw = typeof node.seq === 'string' ? node.seq : '';
+        const overlapPrevRaw = typeof node.overlap_prev === 'string' ? node.overlap_prev : '';
+        const overlapNextRaw = typeof node.overlap_next === 'string' ? node.overlap_next : '';
+        const orientedSeq = this.orientSequence(seqRaw, strand);
+        const overlapPrev = this.orientSequence(overlapPrevRaw, strand);
+        const overlapNext = this.orientSequence(overlapNextRaw, strand);
+        const overlapPrevTm = this.roundTm(this.coerceNumber(node.overlap_prev_tm));
+        const overlapNextTm = this.roundTm(this.coerceNumber(node.overlap_next_tm));
+        const length = orientedSeq.length || Math.max(0, end - start);
+
+        collected.push({
+          id,
+          level,
+          start,
+          end,
+          isOligo,
+          strand,
+          sequence: orientedSeq,
+          length,
+          overlapPrev,
+          overlapNext,
+          overlapPrevTm,
+          overlapNextTm,
+        });
+        const children = Array.isArray(node.children) ? node.children : [];
+        for (const child of children) stack.push(child);
+      }
+
+      this.designFragments.set(collected);
+      const levels = new Set(collected.map((c) => c.level));
+      const current = this.designOverlayLevel();
+      if (current !== null && !levels.has(current)) {
+        this.designOverlayLevel.set(null);
+      }
+      const selected = this.selectedDesignFragment();
+      if (selected && !collected.some((c) => c.id === selected.id)) {
+        this.selectedDesignFragment.set(null);
+      }
+    } catch {
+      this.designFragments.set([]);
+      this.designOverlayLevel.set(null);
+    }
+  }
+
+  private orientSequence(seq: string, strand: string): string {
+    const normalized = (seq || '').toUpperCase();
+    return strand === '-' ? this.reverseComplement(normalized) : normalized;
+  }
+
+  private reverseComplement(seq: string): string {
+    const map: Record<string, string> = { A: 'T', T: 'A', C: 'G', G: 'C' };
+    const upper = (seq || '').toUpperCase();
+    let out = '';
+    for (let i = upper.length - 1; i >= 0; i--) {
+      out += map[upper[i]] ?? 'N';
+    }
+    return out;
+  }
+
+  private coerceNumber(val: any): number | null {
+    if (typeof val === 'number' && Number.isFinite(val)) return val;
+    if (typeof val === 'string' && val.trim().length) {
+      const parsed = Number(val);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }
+
+  private roundTm(val: number | null): number | null {
+    if (val == null || Number.isNaN(val)) return null;
+    return Math.round(val * 10) / 10;
   }
 
   /** Manually force a stems recomputation from the server (uses raw settings). */

@@ -22,7 +22,7 @@ from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
-from sqlalchemy import select, desc, func
+from sqlalchemy import select, desc, func, or_
 from sqlalchemy.orm import Session
 
 from backend.app.db.session import get_db
@@ -40,6 +40,7 @@ class RunItem(BaseModel):
     report_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    note: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -57,7 +58,7 @@ def list_runs(
     db: Session = Depends(get_db),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    q: Optional[str] = Query(None, description="Filter by job_id substring"),
+    q: Optional[str] = Query(None, description="Filter by job_id or description substring"),
 ):
     """
     Return paginated runs ordered by newest first.
@@ -72,8 +73,9 @@ def list_runs(
 
     if q:
         like = f"%{q}%"
-        stmt_base = stmt_base.where(Run.job_id.like(like))
-        count_base = count_base.where(Run.job_id.like(like))
+        predicate = or_(Run.job_id.ilike(like), Run.note.ilike(like))
+        stmt_base = stmt_base.where(predicate)
+        count_base = count_base.where(predicate)
 
     total: int = int(db.scalar(count_base) or 0)
 

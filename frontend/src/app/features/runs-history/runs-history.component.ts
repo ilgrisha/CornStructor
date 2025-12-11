@@ -229,6 +229,10 @@ export class RunsHistoryComponent implements OnInit, OnChanges, AfterViewInit, O
 
   /** Row actions */
   select(r: RunItem) {
+    if (r.status !== 'completed') {
+      window.alert('Only completed runs include stored designs to load.');
+      return;
+    }
     this.loadDesign.emit(r.job_id);
   }
 

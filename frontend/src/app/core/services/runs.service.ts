@@ -19,6 +19,7 @@ export interface RunItem {
   report_url?: string | null;
   created_at: string;
   updated_at: string;
+  note?: string | null;
 }
 
 export interface RunListResponse {

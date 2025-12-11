@@ -22,11 +22,13 @@ def create_design_with_run(
     job_id: str,
     sequence: str,
     params_json: Optional[str],
+    note: Optional[str] = None,
 ) -> Tuple[Run, Design]:
     """Create a RUNNING Run and an associated Design in a single transaction."""
     run = Run(job_id=job_id, status=RunStatus.RUNNING)
     run.sequence_len = len(sequence)
     run.params_json = params_json
+    run.note = note
 
     design = Design(
         sequence=sequence,

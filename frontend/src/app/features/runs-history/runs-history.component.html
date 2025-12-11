@@ -8,14 +8,14 @@
     </div>
 
     <div class="toolbar">
-      <input [(ngModel)]="search" (keyup.enter)="onSearch()" placeholder="Search by Job ID…" />
+      <input [(ngModel)]="search" (keyup.enter)="onSearch()" placeholder="Search runs…" />
       <button (click)="onSearch()">Search</button>
     </div>
 
     <div class="list-scroll" #scrollHost>
       <div class="row header-row">
         <div class="cell when">When</div>
-        <div class="cell job">Job ID</div>
+        <div class="cell desc">Description</div>
         <div class="cell status">Status</div>
         <div class="cell len">Len</div>
         <div class="cell report">Report</div>
@@ -26,10 +26,11 @@
         <div
           class="row"
           *ngFor="let r of items(); trackBy: trackByJob"
-          (click)="loadDesign.emit(r.job_id)"
+          (click)="select(r)"
+          [class.disabled]="r.status !== 'completed'"
         >
           <div class="cell when">{{ r.created_at | date:'medium' }}</div>
-          <div class="cell job mono">{{ r.job_id }}</div>
+          <div class="cell desc" [title]="r.note || ''">{{ r.note || '—' }}</div>
           <div class="cell status">{{ r.status }}</div>
           <div class="cell len">{{ r.sequence_len || '—' }}</div>
           <div class="cell report">

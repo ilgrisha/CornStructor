@@ -14,6 +14,13 @@ export interface DesignStartRequest {
   sequence: string;
   params: any;
   toggles?: Record<string, boolean>;
+  note?: string | null;
+}
+
+interface CompletionInfo {
+  jobId: string;
+  exitCode: number;
+  timestamp: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -23,6 +30,8 @@ export class ApiService {
   readonly logLines: WritableSignal<string[]> = signal<string[]>([]);
   readonly resultLinks: WritableSignal<string[]> = signal<string[]>([]);
   readonly resultIndexLink: WritableSignal<string | null> = signal<string | null>(null);
+  readonly currentJobId: WritableSignal<string | null> = signal<string | null>(null);
+  readonly lastCompletion: WritableSignal<CompletionInfo | null> = signal<CompletionInfo | null>(null);
 
   constructor(private http: HttpClient) {}
 
@@ -31,10 +40,15 @@ export class ApiService {
     this.logLines.set([]);
     this.resultLinks.set([]);
     this.resultIndexLink.set(null);
+    this.currentJobId.set(null);
+    this.lastCompletion.set(null);
 
     this.http.post<{ jobId: string }>('/api/design/start', req)
       .subscribe({
-        next: (res) => this.attachSSE(res.jobId),
+        next: (res) => {
+          this.currentJobId.set(res.jobId);
+          this.attachSSE(res.jobId);
+        },
         error: (err) => this.logLines.update(a => [...a, `ERROR: ${err?.message ?? err}`])
       });
   }
@@ -44,6 +58,7 @@ export class ApiService {
       this.sse.close();
       this.sse = undefined;
     }
+    this.currentJobId.set(null);
   }
 
   private attachSSE(jobId: string) {
@@ -57,6 +72,13 @@ export class ApiService {
         const url = m[1];
         this.resultLinks.update(arr => [...arr, url]);
         if (url.endsWith('/index.html')) this.resultIndexLink.set(url);
+      }
+      const exit = /^EXIT:\s*(-?\d+)/.exec(line);
+      if (exit) {
+        const code = Number(exit[1]);
+        this.lastCompletion.set({ jobId, exitCode: code, timestamp: Date.now() });
+        if (code !== 0) this.resultIndexLink.set(null);
+        this.currentJobId.set(null);
       }
     };
     this.sse.onerror = () => {
