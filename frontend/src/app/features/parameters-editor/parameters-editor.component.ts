@@ -41,6 +41,15 @@ export class ParametersEditorComponent {
   /** Validation error states for JSON editors */
   globalJsonErrs: ErrMap = {};
   levelJsonErrs: Record<number, ErrMap> = {};
+  /** Friendly overrides for terse keys. */
+  private labelOverrides: Record<string, string> = {
+    ga: 'Genetic Algorithm',
+    overlap_run_max: 'Overlap Max Homopolymer',
+    max_children_size: 'Children Max Length',
+    min_children_size: 'Children Min Length',
+    fragment_max_size: 'Fragment Max Length',
+    fragment_min_size: 'Fragment Min Length'
+  };
 
   constructor(public tp: TreeParamsService) {}
 
@@ -277,4 +286,17 @@ export class ParametersEditorComponent {
   }
   gaValue(key: string): any { return (this.tp.globals().ga ?? {})[key]; }
   tmValue(key: string): any { return (this.tp.globals().tm ?? {})[key]; }
+
+  /** Convert snake_case keys into Title Case labels for the UI. */
+  formatLabel(key: string | number): string {
+    if (key === null || key === undefined) return '';
+    const text = String(key);
+    const normalized = text.toLowerCase();
+    if (this.labelOverrides[normalized]) return this.labelOverrides[normalized];
+    return text
+      .split(/[_\s]+/)
+      .filter(Boolean)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  }
 }

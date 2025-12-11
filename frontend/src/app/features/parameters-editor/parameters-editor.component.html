@@ -25,7 +25,7 @@
           <!-- Regular globals (skip 'ga' and 'tm'; handled below) -->
           <div class="row" *ngFor="let kv of tp.globals() | keyvalue">
             <ng-container *ngIf="kv.key !== 'ga' && kv.key !== 'tm'">
-              <div class="label">{{ kv.key }}</div>
+              <div class="label">{{ formatLabel(kv.key) }}</div>
 
               <!-- Boolean -->
               <label class="switch" *ngIf="isBoolean(kv.value)">
@@ -62,11 +62,11 @@
           <!-- GA group: individual fields with boolean support -->
           <div class="group-card" *ngIf="tp.globals()?.ga">
             <div class="group-header">
-              <div class="group-title">ga</div>
+              <div class="group-title">{{ formatLabel('ga') }}</div>
             </div>
             <div class="group-body">
               <div class="row" *ngFor="let k of gaKeys()">
-                <div class="label">{{ k }}</div>
+                <div class="label">{{ formatLabel(k) }}</div>
 
                 <!-- Boolean -->
                 <label class="switch" *ngIf="isBoolean(gaValue(k))">
@@ -108,7 +108,7 @@
 
             <div class="group-body" *ngIf="tmOpen()">
               <div class="row" *ngFor="let k of tmKeys()">
-                <div class="label">{{ k }}</div>
+                <div class="label">{{ formatLabel(k) }}</div>
 
                 <ng-container [ngSwitch]="true">
                   <!-- boolean -->
@@ -186,7 +186,7 @@
             <div class="editor-header">Level {{ sel() }}</div>
             <div class="panel-scroll">
               <div class="row" *ngFor="let kv of tp.levels()[sel()] | keyvalue">
-                <div class="label">{{ kv.key }}</div>
+                <div class="label">{{ formatLabel(kv.key) }}</div>
 
                 <!-- Boolean toggle -->
                 <label class="switch" *ngIf="isBoolean(kv.value)">
