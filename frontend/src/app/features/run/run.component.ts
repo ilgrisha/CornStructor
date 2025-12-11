@@ -9,6 +9,7 @@
  */
 import { Component, signal, effect, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 import { AnalysisService } from '../../core/services/analysis.service';
 import { RunsHistoryComponent } from '../runs-history/runs-history.component';
@@ -18,7 +19,7 @@ import { TreeParamsService } from '../../core/services/tree-params.service';
 @Component({
   selector: 'app-run',
   standalone: true,
-  imports: [CommonModule, RunsHistoryComponent, ParametersEditorComponent],
+  imports: [CommonModule, FormsModule, RunsHistoryComponent, ParametersEditorComponent],
   templateUrl: './run.component.html',
   styleUrls: ['./run.component.css']
 })
@@ -26,6 +27,7 @@ export class RunComponent implements AfterViewInit {
   /** Modals */
   historyOpen = signal<boolean>(false);
   paramsOpen = signal<boolean>(false);
+  runDescription = '';
 
   /** Scrollable logs container */
   @ViewChild('logPane') logPane?: ElementRef<HTMLDivElement>;
@@ -51,13 +53,15 @@ export class RunComponent implements AfterViewInit {
 
   /** Start a new design run using current inputs + tree params (Globals & Levels). */
   run() {
+    const note = this.runDescription.trim();
     const req = {
       sequence: this.a.sequence(),
       params: {
         analysis: this.a.params(),
         tree: { globals: this.tp.globals(), levels: this.tp.levels() }
       },
-      toggles: { homopolymers: true, gc: true, entropy: true, repeats: true }
+      toggles: { homopolymers: true, gc: true, entropy: true, repeats: true },
+      note: note.length ? note : undefined
     };
     this.api.startDesign(req);
   }

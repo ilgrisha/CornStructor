@@ -14,7 +14,7 @@ def test_runs_list_and_detail_roundtrip():
     # create a run
     db = SessionLocal()
     try:
-        record_run_start(db, job_id="abcd1234ef56", sequence_len=123)
+        record_run_start(db, job_id="abcd1234ef56", sequence_len=123, note="Integration test run")
         record_run_completion(db, job_id="abcd1234ef56", report_url="/reports/abcd1234ef56/index.html", exit_code=0)
     finally:
         db.close()
@@ -24,7 +24,8 @@ def test_runs_list_and_detail_roundtrip():
     assert r.status_code == 200
     data = r.json()
     assert data["total"] >= 1
-    assert any(item["job_id"] == "abcd1234ef56" for item in data["items"])
+    target = next(item for item in data["items"] if item["job_id"] == "abcd1234ef56")
+    assert target["note"] == "Integration test run"
 
     # detail
     r2 = client.get("/api/runs/abcd1234ef56")

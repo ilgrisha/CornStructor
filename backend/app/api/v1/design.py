@@ -42,6 +42,11 @@ class DesignStartRequest(BaseModel):
     sequence: str = Field(..., min_length=10, description="DNA sequence (A/C/G/T/N)")
     params: Dict[str, Any] | None = None
     toggles: Dict[str, bool] | None = None
+    note: str | None = Field(
+        None,
+        max_length=255,
+        description="Optional short description shown in history (stored as Run.note).",
+    )
 
 
 class DesignStartResponse(BaseModel):
@@ -152,7 +157,14 @@ async def start_design(req: DesignStartRequest, db: Session = Depends(get_db)):
 
     # Persist Run + Design with final (merged) params
     params_json = json.dumps(final_params)
-    create_design_with_run(db, job_id=job_id, sequence=req.sequence, params_json=params_json)
+    note = (req.note or "").strip() or None
+    create_design_with_run(
+        db,
+        job_id=job_id,
+        sequence=req.sequence,
+        params_json=params_json,
+        note=note,
+    )
 
     # Write "current" parameters to the active config files used by the pipeline
     _write_json(CURRENT_GLOBALS, merged_globals)

@@ -14,6 +14,7 @@ export interface DesignStartRequest {
   sequence: string;
   params: any;
   toggles?: Record<string, boolean>;
+  note?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })

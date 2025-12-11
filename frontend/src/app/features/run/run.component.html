@@ -10,6 +10,17 @@
     </div>
   </div>
 
+  <div class="note-row">
+    <label for="runNote">Run description</label>
+    <input
+      id="runNote"
+      type="text"
+      maxlength="255"
+      [(ngModel)]="runDescription"
+      placeholder="Optional short note to recognize this run"
+    />
+  </div>
+
   <!-- Single result button (no list) -->
   <div class="result-bar" *ngIf="api.resultIndexLink()">
     <a class="result-primary"
