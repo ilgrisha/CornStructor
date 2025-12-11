@@ -37,7 +37,11 @@
 </div>
 
 <!-- History modal -->
-<app-runs-history [open]="historyOpen()" (close)="closeHistory()"></app-runs-history>
+<app-runs-history
+  [open]="historyOpen()"
+  (close)="closeHistory()"
+  (loadDesign)="onLoadDesignFromHistory($event)">
+</app-runs-history>
 
 <!-- Parameters modal -->
 <app-parameters-editor [open]="paramsOpen()" (close)="closeParameters()"></app-parameters-editor>

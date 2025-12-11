@@ -17,7 +17,7 @@ import {
   ViewChild, ElementRef, AfterViewInit, OnDestroy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { AnalysisService, FeatureRegion } from '../../core/services/analysis.service';
+import { AnalysisService, FeatureRegion, DesignOverlayMode, DesignLevelStat } from '../../core/services/analysis.service';
 
 type Cell = { ch: string; cls: string; abs: number };
 type Line = {
@@ -27,6 +27,8 @@ type Line = {
   ruler: string[];
   barAll: boolean[];
   barSel: boolean[];
+  barSense: boolean[];
+  barAntisense: boolean[];
   caret: boolean[];   // len+1; true where caret should be drawn for this line
 };
 
@@ -77,7 +79,9 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
       this.selRanges(),
       this.selRange(),
       this.lineWidth(),
-      this.cursorPos()   // include caret so we recompute when it moves
+      this.cursorPos(),   // include caret so we recompute when it moves
+      this.a.designOverlayRangesSense(),
+      this.a.designOverlayRangesAntisense()
     )
   );
 
@@ -107,6 +111,31 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
     const checked = (ev.target as HTMLInputElement).checked;
     this.hideAllWhenSelected.set(checked);
   }
+
+  overlayOptionLabel(stat: DesignLevelStat): string {
+    const fragLabel = stat.fragments === 1 ? 'fragment' : 'fragments';
+    const oligoLabel = stat.oligos === 1 ? 'oligo' : 'oligos';
+    return `Level ${stat.level} — ${stat.fragments} ${fragLabel}, ${stat.oligos} ${oligoLabel}`;
+  }
+
+  onDesignLevelChange(ev: Event) {
+    const value = (ev.target as HTMLSelectElement).value;
+    if (!value) {
+      this.a.setDesignOverlayLevel(null);
+      return;
+    }
+    this.a.setDesignOverlayLevel(Number(value));
+  }
+
+  onDesignModeChange(ev: Event) {
+    const value = (ev.target as HTMLSelectElement).value as DesignOverlayMode;
+    this.a.setDesignOverlayMode(value);
+  }
+
+  clearDesignOverlaySelection() {
+    this.a.setDesignOverlayLevel(null);
+  }
+
   focusViz() { this.viz.nativeElement.focus(); }
 
   onFastaFile(ev: Event) {
@@ -120,6 +149,7 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
       let seq = text;
       if (m) { id = m[1].trim(); seq = m[2]; }
       const cleaned = seq.replace(/[^ACGTacgt]/g, '').toUpperCase();
+      this.a.clearDesignOverlayData();
       this.a.sequence.set(cleaned);
       this._lastFastaName.set(file.name);
       this._lastFastaId.set(id);
@@ -323,7 +353,11 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
     }
     return arr;
   }
-  private paintBar(start0: number, len: number, ranges: FeatureRegion[] | null): boolean[] {
+  private paintBar(
+    start0: number,
+    len: number,
+    ranges: Array<{ start: number; end: number }> | null
+  ): boolean[] {
     const out = new Array<boolean>(len).fill(false);
     if (!ranges || !ranges.length) return out;
     for (const r of ranges) {
@@ -347,7 +381,9 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
     ranges: FeatureRegion[],
     selected: FeatureRegion | null,
     lineW: number,
-    caretAbs: number
+    caretAbs: number,
+    senseRanges: { start: number; end: number }[],
+    antisenseRanges: { start: number; end: number }[]
   ): Line[] {
     const out: Line[] = [];
     for (let i = 0; i < seq.length; i += lineW) {
@@ -367,6 +403,8 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
         ruler: this.buildRulerChars(i, len),
         barAll: this.paintBar(i, len, ranges),
         barSel: this.paintSingle(i, len, selected),
+        barSense: this.paintBar(i, len, senseRanges),
+        barAntisense: this.paintBar(i, len, antisenseRanges),
         caret: caretArr
       });
     }
@@ -377,4 +415,6 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
   // color for bars
   barColorAll = computed(() => this.a.selectedKind() ? this.a.featureColor(this.a.selectedKind()!) : 'transparent');
   barColorSel = this.barColorAll;
+  readonly senseBarColor = '#38bdf8';
+  readonly antisenseBarColor = '#ec4899';
 }

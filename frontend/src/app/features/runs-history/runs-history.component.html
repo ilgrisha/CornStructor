@@ -26,7 +26,8 @@
         <div
           class="row"
           *ngFor="let r of items(); trackBy: trackByJob"
-          (click)="loadDesign.emit(r.job_id)"
+          (click)="select(r)"
+          [class.disabled]="r.status !== 'completed'"
         >
           <div class="cell when">{{ r.created_at | date:'medium' }}</div>
           <div class="cell desc" [title]="r.note || ''">{{ r.note || '—' }}</div>

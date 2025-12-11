@@ -15,6 +15,7 @@ import { AnalysisService } from '../../core/services/analysis.service';
 import { RunsHistoryComponent } from '../runs-history/runs-history.component';
 import { ParametersEditorComponent } from '../parameters-editor/parameters-editor.component';
 import { TreeParamsService } from '../../core/services/tree-params.service';
+import { DesignService } from '../../core/services/design.service';
 
 @Component({
   selector: 'app-run',
@@ -42,7 +43,12 @@ export class RunComponent implements AfterViewInit {
     });
   });
 
-  constructor(public api: ApiService, private a: AnalysisService, public tp: TreeParamsService) {}
+  constructor(
+    public api: ApiService,
+    private a: AnalysisService,
+    public tp: TreeParamsService,
+    private designs: DesignService
+  ) {}
 
   ngAfterViewInit(): void {
     setTimeout(() => {
@@ -50,6 +56,12 @@ export class RunComponent implements AfterViewInit {
       if (el) el.scrollTop = el.scrollHeight;
     }, 0);
   }
+
+  private completionEffect = effect(() => {
+    const completion = this.api.lastCompletion();
+    if (!completion || completion.exitCode !== 0) return;
+    this.loadDesignResult(completion.jobId);
+  });
 
   /** Start a new design run using current inputs + tree params (Globals & Levels). */
   run() {
@@ -69,6 +81,9 @@ export class RunComponent implements AfterViewInit {
   /** History modal */
   openHistory() { this.historyOpen.set(true); }
   closeHistory() { this.historyOpen.set(false); }
+  onLoadDesignFromHistory(jobId: string) {
+    this.loadDesignResult(jobId, { closeHistory: true });
+  }
 
   /** Parameters modal */
   openParameters() {
@@ -78,4 +93,17 @@ export class RunComponent implements AfterViewInit {
     }
   }
   closeParameters() { this.paramsOpen.set(false); }
+
+  private loadDesignResult(jobId: string, opts?: { closeHistory?: boolean }) {
+    this.designs.getByRun(jobId).subscribe({
+      next: (design) => {
+        this.a.applyDesignResult(design.sequence ?? '', design.tree_json ?? null);
+        if (opts?.closeHistory) this.closeHistory();
+      },
+      error: (err) => {
+        console.error('Failed to load design', err);
+        window.alert('Design artifacts are not available for this run yet.');
+      },
+    });
+  }
 }

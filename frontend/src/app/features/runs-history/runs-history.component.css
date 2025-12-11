@@ -11,6 +11,8 @@
 .list-scroll { overflow-y: auto; flex: 1; }
 .row { display: grid; grid-template-columns: 1.6fr 2.6fr 1fr 0.7fr 0.9fr 0.9fr; gap: 8px; align-items: center; padding: 10px 16px; border-bottom: 1px solid #f6f6f6; cursor: pointer; background: #fff; }
 .row:hover { background: #fafafa; }
+.row.disabled { cursor: not-allowed; opacity: 0.65; }
+.row.disabled:hover { background: #fff; }
 .header-row { position: sticky; top: 0; z-index: 1; font-weight: 600; color: #444; cursor: default; background: #fbfbfb; border-bottom: 1px solid #eee; }
 .cell.actions { display: flex; gap: 8px; justify-content: flex-end; }
 .cell.desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #475569; }

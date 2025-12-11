@@ -55,6 +55,23 @@ export interface AnalysisParams {
   stemMergeMaxGap: number;
 }
 
+export type DesignOverlayMode = 'fragments' | 'oligos';
+
+interface DesignFragmentRange {
+  id: string;
+  level: number;
+  start: number;
+  end: number;
+  isOligo: boolean;
+  strand: '+' | '-';
+}
+
+export interface DesignLevelStat {
+  level: number;
+  fragments: number;
+  oligos: number;
+}
+
 const API_BASE = '/api';
 
 @Injectable({ providedIn: 'root' })
@@ -358,6 +375,147 @@ export class AnalysisService {
   }
   selectRange(r: FeatureRegion | null) {
     this.selectedRange.set(r);
+  }
+
+  // ---- design overlay (fragments / oligos) ----
+  private designFragments = signal<DesignFragmentRange[]>([]);
+  private designReference = signal<string | null>(null);
+  designOverlayLevel: WritableSignal<number | null> = signal<number | null>(null);
+  designOverlayMode: WritableSignal<DesignOverlayMode> = signal<DesignOverlayMode>('fragments');
+
+  designLevelStats = computed<DesignLevelStat[]>(() => {
+    const stats = new Map<number, DesignLevelStat>();
+    for (const frag of this.designFragments()) {
+      let entry = stats.get(frag.level);
+      if (!entry) {
+        entry = { level: frag.level, fragments: 0, oligos: 0 };
+        stats.set(frag.level, entry);
+      }
+      if (frag.isOligo) entry.oligos += 1;
+      else entry.fragments += 1;
+    }
+    return Array.from(stats.values()).sort((a, b) => a.level - b.level);
+  });
+
+  private designReferenceMatches = computed(() => {
+    const ref = this.designReference();
+    if (!ref) return false;
+    const seq = (this.sequence() || '').toUpperCase();
+    return seq === ref;
+  });
+
+  designOverlayAvailable = computed(() => this.designFragments().length > 0);
+  designOverlayControlsEnabled = computed(
+    () => this.designOverlayAvailable() && this.designReferenceMatches()
+  );
+
+  private buildDesignOverlayRanges(strand: '+' | '-') {
+    const level = this.designOverlayLevel();
+    if (level === null) return [];
+    const mode = this.designOverlayMode();
+    const filtered = this.designFragments().filter(
+      (frag) =>
+        frag.level === level &&
+        (mode === 'oligos' ? frag.isOligo : !frag.isOligo) &&
+        frag.strand === strand
+    );
+    return filtered
+      .map((frag) => {
+        const start = Math.max(0, Math.min(frag.start, frag.end));
+        const end = Math.max(frag.start, frag.end);
+        return { start, end };
+      })
+      .filter((r) => r.end > r.start)
+      .sort((a, b) => a.start - b.start);
+  }
+
+  designOverlayRangesSense = computed<{ start: number; end: number }[]>(() =>
+    this.buildDesignOverlayRanges('+')
+  );
+  designOverlayRangesAntisense = computed<{ start: number; end: number }[]>(() =>
+    this.buildDesignOverlayRanges('-')
+  );
+
+  designOverlayVisible = computed(
+    () =>
+      this.designOverlayControlsEnabled() &&
+      this.designOverlayLevel() !== null &&
+      (this.designOverlayRangesSense().length > 0 || this.designOverlayRangesAntisense().length > 0)
+  );
+
+  designOverlayDisabledReason = computed<string | null>(() => {
+    if (!this.designOverlayAvailable()) return null;
+    if (!this.designReferenceMatches()) {
+      return 'Design overlay disabled: sequence differs from the loaded design reference.';
+    }
+    return null;
+  });
+
+  applyDesignResult(sequence: string, treeJson: string | null) {
+    const cleaned = (sequence || '').replace(/[^ACGTacgt]/g, '').toUpperCase();
+    this.sequence.set(cleaned);
+    this.designReference.set(cleaned);
+    this.syncDesignOverlay(treeJson);
+  }
+
+  setDesignOverlayLevel(level: number | null) {
+    this.designOverlayLevel.set(level);
+  }
+
+  setDesignOverlayMode(mode: DesignOverlayMode) {
+    this.designOverlayMode.set(mode);
+  }
+
+  clearDesignOverlayData() {
+    this.designFragments.set([]);
+    this.designOverlayLevel.set(null);
+    this.designOverlayMode.set('fragments');
+    this.designReference.set(null);
+  }
+
+  private syncDesignOverlay(treeJson: string | null) {
+    if (!treeJson) {
+      this.designFragments.set([]);
+      this.designOverlayLevel.set(null);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(treeJson);
+      const root = parsed?.tree ?? parsed;
+      if (!root) {
+        this.designFragments.set([]);
+        this.designOverlayLevel.set(null);
+        return;
+      }
+
+      const stack: any[] = [root];
+      const collected: DesignFragmentRange[] = [];
+
+      while (stack.length) {
+        const node = stack.pop();
+        if (!node) continue;
+        const level = typeof node.level === 'number' ? node.level : 0;
+        const start = typeof node.start === 'number' ? node.start : 0;
+        const end = typeof node.end === 'number' ? node.end : start;
+        const id = typeof node.fragment_id === 'string' ? node.fragment_id : '';
+        const isOligo = Boolean(node.is_oligo);
+        const strand = node.strand === '-' ? '-' : '+';
+        collected.push({ id, level, start, end, isOligo, strand });
+        const children = Array.isArray(node.children) ? node.children : [];
+        for (const child of children) stack.push(child);
+      }
+
+      this.designFragments.set(collected);
+      const levels = new Set(collected.map((c) => c.level));
+      const current = this.designOverlayLevel();
+      if (current !== null && !levels.has(current)) {
+        this.designOverlayLevel.set(null);
+      }
+    } catch {
+      this.designFragments.set([]);
+      this.designOverlayLevel.set(null);
+    }
   }
 
   /** Manually force a stems recomputation from the server (uses raw settings). */
