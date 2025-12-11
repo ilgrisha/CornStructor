@@ -10,7 +10,7 @@
       <span *ngIf="hasInvalid()"> • non-DNA chars: {{ invalidCount() }}</span>
       <span *ngIf="a.selectedKind()"> • selected: {{ a.selectedKind() }} ({{ selRanges().length }} merged)</span>
       <span> • cursor: {{ cursorPos() + 1 }}</span>
-      <span *ngIf="lastFastaName()"> • FASTA: {{ lastFastaName() }}<ng-container *ngIf="lastFastaId()">( {{ lastFastaId() }} )</ng-container></span>
+      <span *ngIf="a.sequenceReferenceInfo() as ref"> • {{ referenceLabel(ref) }}</span>
     </div>
   </div>
 

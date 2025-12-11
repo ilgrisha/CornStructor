@@ -16,6 +16,7 @@ import { RunsHistoryComponent } from '../runs-history/runs-history.component';
 import { ParametersEditorComponent } from '../parameters-editor/parameters-editor.component';
 import { TreeParamsService } from '../../core/services/tree-params.service';
 import { DesignService } from '../../core/services/design.service';
+import { RunItem } from '../../core/services/runs.service';
 
 @Component({
   selector: 'app-run',
@@ -81,8 +82,10 @@ export class RunComponent implements AfterViewInit {
   /** History modal */
   openHistory() { this.historyOpen.set(true); }
   closeHistory() { this.historyOpen.set(false); }
-  onLoadDesignFromHistory(jobId: string) {
-    this.loadDesignResult(jobId, { closeHistory: true });
+  onLoadDesignFromHistory(run: RunItem) {
+    this.runDescription = run.note ?? '';
+    this.api.resultIndexLink.set(run.report_url ?? null);
+    this.loadDesignResult(run.job_id, { closeHistory: true });
   }
 
   /** Parameters modal */
@@ -97,7 +100,14 @@ export class RunComponent implements AfterViewInit {
   private loadDesignResult(jobId: string, opts?: { closeHistory?: boolean }) {
     this.designs.getByRun(jobId).subscribe({
       next: (design) => {
-        this.a.applyDesignResult(design.sequence ?? '', design.tree_json ?? null);
+        const note = design.run_note ?? '';
+        this.runDescription = note;
+        this.a.applyDesignResult(design.sequence ?? '', design.tree_json ?? null, {
+          source: 'run',
+          label: note.length ? note : (design.name ?? null),
+          id: design.job_id || jobId,
+          note: note || null,
+        });
         if (opts?.closeHistory) this.closeHistory();
       },
       error: (err) => {

@@ -28,6 +28,7 @@ def read_design_by_run(job_id: str, db: Session = Depends(get_db)):
     return {
         **DesignDetail.model_validate(design).model_dump(),
         "job_id": run.job_id if run else "",
+        "run_note": run.note if run else None,
     }
 
 @router.get("/{design_id}", response_model=DesignDetail)

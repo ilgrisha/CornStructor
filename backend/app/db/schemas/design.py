@@ -31,3 +31,4 @@ class DesignDetail(DesignBase):
 
 class DesignByRunResponse(DesignBase):
     job_id: str
+    run_note: Optional[str] = None

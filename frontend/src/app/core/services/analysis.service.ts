@@ -78,6 +78,13 @@ export interface DesignLevelStat {
   oligos: number;
 }
 
+export interface SequenceReferenceInfo {
+  source: 'run' | 'fasta' | 'manual';
+  label: string | null;
+  id: string | null;
+  note?: string | null;
+}
+
 const API_BASE = '/api';
 
 @Injectable({ providedIn: 'root' })
@@ -98,6 +105,26 @@ export class AnalysisService {
   });
 
   length = computed(() => this.sequence().length);
+
+  private sequenceReferenceState: WritableSignal<SequenceReferenceInfo | null> = signal<SequenceReferenceInfo | null>(null);
+  sequenceReferenceInfo = computed(() => this.sequenceReferenceState());
+
+  setSequenceReference(info: SequenceReferenceInfo | null) {
+    if (!info) {
+      this.sequenceReferenceState.set(null);
+      return;
+    }
+    const label = info.label?.trim() || null;
+    const id = info.id != null ? String(info.id).trim() : null;
+    const note =
+      info.note == null ? null : (typeof info.note === 'string' ? info.note : String(info.note)).trim() || null;
+    this.sequenceReferenceState.set({
+      source: info.source,
+      label,
+      id,
+      note,
+    });
+  }
 
   // ---- parameters ----
   params: WritableSignal<AnalysisParams> = signal({
@@ -459,11 +486,12 @@ export class AnalysisService {
     { allowSignalWrites: true }
   );
 
-  applyDesignResult(sequence: string, treeJson: string | null) {
+  applyDesignResult(sequence: string, treeJson: string | null, meta?: SequenceReferenceInfo | null) {
     const cleaned = (sequence || '').replace(/[^ACGTacgt]/g, '').toUpperCase();
     this.sequence.set(cleaned);
     this.designReference.set(cleaned);
     this.syncDesignOverlay(treeJson);
+    this.setSequenceReference(meta ?? null);
   }
 
   setDesignOverlayLevel(level: number | null) {
@@ -482,6 +510,7 @@ export class AnalysisService {
     this.designOverlayMode.set('fragments');
     this.designReference.set(null);
     this.selectedDesignFragment.set(null);
+    this.setSequenceReference(null);
   }
 
   selectDesignFragment(fragment: DesignFragmentRange | null) {

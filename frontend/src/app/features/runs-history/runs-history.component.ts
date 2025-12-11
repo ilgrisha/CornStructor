@@ -45,8 +45,8 @@ import { AnalysisService } from '../../core/services/analysis.service';
 export class RunsHistoryComponent implements OnInit, OnChanges, AfterViewInit, OnDestroy {
   @Input() open = false;
   @Output() close = new EventEmitter<void>();
-  /** Fired when the user chooses a run (job_id). */
-  @Output() loadDesign = new EventEmitter<string>();
+  /** Fired when the user chooses a run (job metadata). */
+  @Output() loadDesign = new EventEmitter<RunItem>();
 
   @ViewChild('scrollHost') scrollHost?: ElementRef<HTMLElement>;
   @ViewChild('sentinel') sentinel?: ElementRef<HTMLElement>;
@@ -233,7 +233,7 @@ export class RunsHistoryComponent implements OnInit, OnChanges, AfterViewInit, O
       window.alert('Only completed runs include stored designs to load.');
       return;
     }
-    this.loadDesign.emit(r.job_id);
+    this.loadDesign.emit(r);
   }
 
   onDelete(r: RunItem, ev?: MouseEvent) {

@@ -17,7 +17,7 @@ import {
   ViewChild, ElementRef, AfterViewInit, OnDestroy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { AnalysisService, FeatureRegion, DesignOverlayMode, DesignLevelStat, DesignFragmentRange } from '../../core/services/analysis.service';
+import { AnalysisService, FeatureRegion, DesignOverlayMode, DesignLevelStat, DesignFragmentRange, SequenceReferenceInfo } from '../../core/services/analysis.service';
 
 type Cell = { ch: string; cls: string; abs: number };
 type Line = {
@@ -60,11 +60,6 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
   cursorPos = signal<number>(0);
   hasInvalid = computed(() => this.a.invalid().some(v => v));
   invalidCount = computed(() => this.a.invalid().reduce((s, v) => s + (v ? 1 : 0), 0));
-
-  private _lastFastaName: WritableSignal<string | null> = signal(null);
-  private _lastFastaId: WritableSignal<string | null> = signal(null);
-  lastFastaName = computed(() => this._lastFastaName());
-  lastFastaId = computed(() => this._lastFastaId());
 
   private selStart: WritableSignal<number | null> = signal(null);
   private selEnd: WritableSignal<number | null> = signal(null);
@@ -163,6 +158,18 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
     return `${this.fragmentLabel(fragment)} ${fragment.id} (${fragment.length} bp)`;
   }
 
+  referenceLabel(meta: SequenceReferenceInfo | null): string {
+    if (!meta) return '';
+    const prefix = meta.source === 'fasta' ? 'FASTA' : 'Reference';
+    const baseLabel = meta.label?.trim().length
+      ? meta.label.trim()
+      : meta.source === 'run' && meta.id
+        ? `Run ${meta.id}`
+        : 'Loaded sequence';
+    const idSuffix = meta.id ? ` (${meta.id})` : '';
+    return `${prefix}: ${baseLabel}${idSuffix}`;
+  }
+
   focusViz() { this.viz.nativeElement.focus(); }
 
   onFastaFile(ev: Event) {
@@ -178,8 +185,7 @@ export class SequenceBoxComponent implements AfterViewInit, OnDestroy {
       const cleaned = seq.replace(/[^ACGTacgt]/g, '').toUpperCase();
       this.a.clearDesignOverlayData();
       this.a.sequence.set(cleaned);
-      this._lastFastaName.set(file.name);
-      this._lastFastaId.set(id);
+      this.a.setSequenceReference({ source: 'fasta', label: file.name, id });
       this.cursorPos.set(cleaned.length);
       this.clearSelection();
 

@@ -13,4 +13,5 @@ export interface Design {
 
 export interface DesignByRun extends Design {
   job_id: string;
+  run_note?: string | null;
 }
