@@ -7,7 +7,22 @@
  * - Right column fills the rest, stacks Sequence then Construction tree
  * ==========================================================================*/
 .shell{display:flex;flex-direction:column;gap:12px;padding:12px}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .topbar h1{margin:0;font-size:18px;color:#0f172a}
+.help-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 10px;
+  border-radius:8px;
+  border:1px solid #d1d5db;
+  background:#fff;
+  color:#0f172a;
+  font-weight:600;
+  text-decoration:none;
+  font-size:13px;
+}
+.help-btn:hover{border-color:#38bdf8;color:#0f172a}
 
 .content{
   display:grid;

@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CornStructor Help</title>
+  <style>
+    :root {
+      /* Light theme aligned with CornStructor UI */
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --accent: #38bdf8;
+      --accent-2: #ec4899;
+      --border: #e2e8f0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(8px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header h1 { margin: 0 0 4px; font-size: 24px; }
+    header p { margin: 0; color: var(--muted); }
+    main {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 16px;
+      padding: 16px 24px 32px;
+      flex: 1;
+    }
+    nav {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      position: sticky;
+      top: 88px;
+      align-self: start;
+    }
+    nav .search {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #ffffff;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+    nav button {
+      width: 100%;
+      text-align: left;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: #f8fafc;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: border 120ms, transform 120ms;
+    }
+    nav button:hover { border-color: var(--accent); transform: translateY(-1px); }
+    nav button.active { border-color: var(--accent); color: var(--accent); }
+    section.card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    }
+    .card h2 { margin-top: 0; }
+    .muted { color: var(--muted); }
+    .pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent);
+      font-size: 12px;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      margin-right: 6px;
+    }
+    details {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin: 8px 0;
+    }
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin: 12px 0;
+    }
+    .stat {
+      padding: 12px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: 36px 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+    .step-num {
+      height: 32px; width: 32px;
+      border-radius: 10px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      display: grid; place-items: center;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .inline-chip {
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: rgba(168, 85, 247, 0.15);
+      color: var(--accent-2);
+      font-size: 12px;
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      margin-left: 4px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 8px;
+      background: rgba(56, 189, 248, 0.2);
+      color: var(--accent);
+      font-size: 12px;
+      margin-right: 6px;
+    }
+    .callout {
+      border-left: 3px solid var(--accent);
+      padding: 10px 12px;
+      background: rgba(56, 189, 248, 0.12);
+      border-radius: 10px;
+      margin: 10px 0;
+    }
+    a { color: var(--accent); }
+    @media (max-width: 960px) {
+      main { grid-template-columns: 1fr; }
+      nav { position: relative; top: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>CornStructor Help</h1>
+  </header>
+
+  <main>
+    <nav>
+      <input class="search" type="text" placeholder="Filter sections…" oninput="filterSections(this.value)">
+      <button data-target="overview" class="active" onclick="jumpTo('overview', this)">Overview</button>
+      <button data-target="flow" onclick="jumpTo('flow', this)">Design Flow</button>
+      <button data-target="sequence" onclick="jumpTo('sequence', this)">Sequence Editor</button>
+      <button data-target="analysis-params" onclick="jumpTo('analysis-params', this)">Analysis Parameters</button>
+      <button data-target="tree-params" onclick="jumpTo('tree-params', this)">Design Tree Parameters</button>
+      <button data-target="runs" onclick="jumpTo('runs', this)">Run History</button>
+      <button data-target="reports" onclick="jumpTo('reports', this)">Reports</button>
+    </nav>
+
+    <div>
+      <section class="card" id="overview" data-label="overview">
+        <h2>About CornStructor</h2>
+        <p>CornStructor helps inspect complex DNA and make design for Annealing-Elongation DNA construction (Gen3). It designs hierarchical construction trees, overlays fragments and oligos of the design on your reference sequence so you can see overlaps and strands at a glance, and keeps runs history.</p>
+        <ul>
+          <li><strong>Analyze:</strong> Check GC%, entropy/complexity, repeats, and stems on your reference sequence before designing to spot risky regions early.</li>
+          <li><strong>Design:</strong> Set global and per-level rules, start the pipeline, and watch logs as it runs.</li>
+          <li><strong>Visualize:</strong> Overlay fragments/oligos (sense/antisense), inspect overlaps and Tm, and click to see properties.</li>
+          <li><strong>Recall:</strong> Reload any completed run with its note, reference sequence, and saved report in one click.</li>
+          <li><strong>Persist:</strong> Reports are regenerated on demand from saved trees, GA history, and parameters.</li>
+        </ul>
+      </section>
+
+      <section class="card" id="flow" data-label="flow design pipeline">
+        <h2>End-to-End Design Flow</h2>
+        <div class="flow">
+          <div class="step-num">1</div>
+          <div>
+            <strong>Prepare sequence</strong>. Paste or upload FASTA into the Sequence Editor. Invalid bases are flagged; overlays stay disabled if the sequence no longer matches the design reference.
+          </div>
+          <div class="step-num">2</div>
+          <div>
+            <strong>Sequence analysis</strong>. Adjust analysis settings (GC, entropy, repeats, stems) to spot risky regions before designing.
+          </div>
+          <div class="step-num">3</div>
+          <div>
+            <strong>Set design parameters</strong>. Configure construction tree globals/levels in the Parameters dialog.
+          </div>
+          <div class="step-num">4</div>
+          <div>
+            <strong>Start design</strong>. Add an optional run description; click <em>Start design</em>. Logs stream immediately; artifacts land under <code>/reports/&lt;jobId&gt;/</code>.
+          </div>
+          <div class="step-num">5</div>
+          <div>
+            <strong>Review &amp; visualize</strong>. When complete, the sequence + tree load automatically. Choose overlay level/mode to see fragments or oligos aligned to the reference.
+          </div>
+          <div class="step-num">6</div>
+          <div>
+            <strong>Revisit later</strong>. Open History, pick a completed run: the app restores the reference sequence, your saved note, and the report link without leaving the page.
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="sequence" data-label="sequence editor">
+        <h2>Sequence Editor</h2>
+        <p class="muted">Edit, inspect, and align design overlays against the reference sequence—built for biologists first.</p>
+        <ul>
+          <li><strong>Editing &amp; navigation:</strong> Click to move caret; drag to select; copy/paste DNA only (non-ACGT is ignored). Keyboard: arrows/Home/End/Page-like via per-line width; Backspace/Delete mutate sequence. Invalid characters are counted and highlighted.</li>
+          <li><strong>Features overlay:</strong> Turn on GC, entropy (complexity), repeats, and stems to spot risky regions. Hide the “all ranges” bar when zooming into a single range.</li>
+          <li><strong>Reference integrity:</strong> Overlays only appear when the sequence matches the stored reference. Edits or a new FASTA pause overlays until you reload the matching design (or pick the run again from History).</li>
+          <li><strong>Overlay modes &amp; levels:</strong> Fragments show intermediate pieces at the chosen level; oligos show the leaf pieces. Switch levels to inspect different assembly depths.</li>
+          <li><strong>Strands &amp; styling:</strong> Sense (+) and antisense (-) bars use subtly distinct hues with uniform thickness and consistent gaps. Tooltips and labels show the fragment/oligo id.</li>
+          <li><strong>Click to inspect:</strong> Click a bar to pin details: length, coordinates, strand, left/right overlaps with lengths and Tm (rounded). Selection also highlights the corresponding bar.</li>
+        </ul>
+      </section>
+
+      <section class="card" id="analysis-params" data-label="analysis parameters influence gc entropy repeats stems">
+        <h2>Sequence Analysis Parameters</h2>
+        <p>These sliders govern the “quality” overlays. They are saved with each run and reapplied when you reload it.</p>
+        <ul>
+          <li><strong>GC% (window + band):</strong> Sliding window size (e.g., 100 nt) plus min/max GC thresholds per window. Smaller windows expose local spikes/dips; larger windows smooth trends. Outside-band windows are marked GC-low or GC-high.</li>
+          <li><strong>Homopolymers:</strong> Minimum run length to flag stretches of identical bases; raise to reduce noise, lower to catch shorter runs.</li>
+          <li><strong>Low complexity (Shannon):</strong> Entropy minimum threshold (e.g., 1.8) to flag low-diversity windows; raise to surface repetitive/biased regions, lower to tolerate repetition.</li>
+          <li><strong>Repeats (tandem):</strong> K-mer range and min repetitions to catch short tandem repeats; tighten to surface dense clusters earlier.</li>
+          <li><strong>Long repeats (approximate):</strong> Minimum length and percent identity for approximate repeats that can misassemble across distant loci.</li>
+          <li><strong>Secondary structure (stems):</strong> Min stem length and merge gap control sensitivity to hairpins; recomputed whenever the sequence changes.</li>
+        </ul>
+      </section>
+
+      <section class="card" id="tree-params" data-label="design tree parameters globals levels overlaps sizing">
+        <h2>Design Tree Parameters</h2>
+        <p>Construction tree settings are split into <strong>globals</strong> (apply everywhere) and <strong>levels</strong> (per-depth overrides). Set them once; they’re saved with the run.</p>
+        <h3>Globals</h3>
+        <ul>
+          <li><strong>Runtime controls:</strong> CPU workers fraction—governs how much parallelism is applied during design.</li>
+          <li><strong>Genetic Algorithm:</strong> Population size, generations, mutation rate, crossover rate, selection pressure—control search breadth/exploitation.</li>
+          <li><strong>Tm method/conditions:</strong> Computation method and environmental assumptions (e.g., salt/primer concentrations) used consistently for overlaps.</li>
+        </ul>
+        <h3>Division adjustment</h3>
+        <ul>
+          <li><strong>Attempts per junction:</strong> How many refinement tries are made at each junction to improve splits.</li>
+          <li><strong>Step (bp):</strong> Base-pair step size used when adjusting divisions.</li>
+          <li><strong>Max total adjustment rounds:</strong> Upper bound on how many adjustment cycles the splitter performs.</li>
+        </ul>
+        <h3>Levels</h3>
+        <ul>
+          <li><strong>Sizing targets:</strong> Pick the “ideal” fragment/oligo size for this level and guide how parent pieces are split.</li>
+          <li><strong>Length bounds:</strong> Set the shortest and longest allowed fragments/oligos for this level.</li>
+          <li><strong>Overlaps:</strong> Per-level allowed overlap ranges, Tm targets, and related penalties that shape overlap selection at that depth.</li>
+        </ul>
+      </section>
+
+      <section class="card" id="runs" data-label="runs history description note restore sequence">
+        <h2>Run History</h2>
+        <p>Find and restore previous designs without leaving the page.</p>
+        <ul>
+          <li>Search by job id or description (note).</li>
+          <li>Select a completed run to reload its reference sequence, tree, saved note, and report link (overlays re-enable when the reference matches).</li>
+          <li>Reports open in a new tab; the current page keeps your context.</li>
+          <li>Delete removes the run and its linked design (optionally artifacts).</li>
+        </ul>
+      </section>
+
+      <section class="card" id="reports" data-label="reports artifacts ga progress tree analysis">
+        <h2>Reports & Artifacts</h2>
+        <p>All artifacts live under <code>/reports/&lt;jobId&gt;/</code> and can be re-rendered from DB snapshots.</p>
+        <ul>
+          <li><strong>index.html</strong>: entry point with links to tree, analysis, GA progress, and downloads—open this first.</li>
+          <li><strong>tree.json</strong> &amp; <strong>ga_progress.json</strong>: serialized design + GA timeline.</li>
+          <li><strong>fragments.fasta</strong> &amp; <strong>oligos.csv</strong>: sequence exports for synthesis.</li>
+          <li><strong>Bundle</strong>: zipped package for offline inspection.</li>
+        </ul>
+      </section>
+
+    </div>
+  </main>
+
+  <script>
+    function jumpTo(id, btn) {
+      document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    function filterSections(query) {
+      const q = (query || '').toLowerCase();
+      document.querySelectorAll('section.card').forEach(sec => {
+        const label = (sec.dataset.label || '').toLowerCase();
+        const text = (sec.textContent || '').toLowerCase();
+        sec.style.display = (label.includes(q) || text.includes(q)) ? '' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>
