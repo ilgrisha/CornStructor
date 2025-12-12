@@ -1,7 +1,7 @@
 # CornStructor
 **Version: v4.1.0**
 
-CornStructor is a modern, containerized full‑stack app for hierarchical DNA design:
+CornStructor is a modern, containerized full‑stack app for hierarchical DNA design and visualization. It helps you design construction trees, inspect oligos/fragments, track past runs (with notes), and re‑generate reports on demand — even after restarts.
 
 - **Frontend**: Angular (dev via `ng serve`, prod as static assets)
 - **Backend**: FastAPI (OpenAPI docs at `/docs`)
@@ -10,6 +10,31 @@ CornStructor is a modern, containerized full‑stack app for hierarchical DNA de
 - **Artifacts**: Served under `/reports/<jobId>/...`
 
 This README shows how to run **development** and **production**, pass **custom ports** using `make`, poke the **API**, run **tests**, and troubleshoot common issues.
+
+---
+
+## Overview
+
+- **Construction tree design**: Launch jobs that build hierarchical assemblies with per‑level constraints and global parameters.
+- **Live feedback**: Stream pipeline logs over SSE; “Open report” becomes available as soon as artifacts exist.
+- **Visualization**: Sequence box overlays fragments/oligos (sense/antisense), shows overlaps/Tm, and keeps overlays in sync with the reference sequence.
+- **Run history**: Browse previous runs (with stored notes/descriptions), reload a design into the Sequence box, and open the saved report in a new tab.
+- **On‑the‑fly reports**: Dynamic `/reports/<jobId>/…` renderers pull tree/GA/params from the database so reports survive container restarts.
+
+---
+
+## Key Features & Flows
+
+- **Start a design**: Provide sequence + parameters; backend persists Run/Design, merges tree configs, and runs the in‑process pipeline. Logs stream back; artifacts land under `/reports/<jobId>/`.
+- **Load from history**: Selecting a completed run restores its reference sequence + tree into the Sequence box, updates the run description field, and keeps the report link targeting that run.
+- **Sequence box tooling**:
+  - Upload FASTA or paste sequence; tracks reference metadata (FASTA name/id or run note/id).
+  - Toggle overlays by design level and mode (fragments/oligos), with sense/antisense coloring and per‑fragment details (length, coords, overlaps, Tm).
+  - Range selection, per‑line rulers/ticks, and feature highlighting (GC bands, entropy, repeats, stems, etc.).
+- **Persisted context**:
+  - Runs store sequence length, params snapshot, note/description, status, exit code, report URL, and linked Design id.
+  - Designs store sequence, params JSON (including locked globals/levels), tree JSON, GA progress JSON, and optional name.
+- **Reports**: GA progress, tree, analysis, FASTA/CSV exports, and bundle download; all accessible via `/reports/<jobId>/index.html`.
 
 ---
 

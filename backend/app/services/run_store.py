@@ -58,9 +58,11 @@ def list_runs(db: Session, *, q: Optional[str] = None, limit: int = 50, offset: 
     return total, items
 
 def get_run(db: Session, job_id: str) -> Run | None:
+    """Fetch a single Run by its stable job id."""
     return db.execute(select(Run).where(Run.job_id == job_id)).scalar_one_or_none()
 
 def delete_run(db: Session, job_id: str) -> bool:
+    """Delete a Run row; returns True if a row was removed."""
     res = db.execute(delete(Run).where(Run.job_id == job_id))
     db.commit()
     return res.rowcount > 0

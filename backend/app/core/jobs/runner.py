@@ -32,6 +32,7 @@ class Job:
 
 
 class JobManager:
+    """Manage in-process CornStructor jobs and their SSE queues."""
     def __init__(self) -> None:
         self._jobs: Dict[str, Job] = {}
 
@@ -46,6 +47,7 @@ class JobManager:
         return job_id
 
     def get(self, job_id: str) -> Optional[Job]:
+        """Return the Job handle for a given id, if it exists."""
         return self._jobs.get(job_id)
 
     async def start_with_existing_id(self, *, job_id: str, fasta_text: str) -> None:

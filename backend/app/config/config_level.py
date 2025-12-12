@@ -22,8 +22,6 @@ v0.5.1
 - Child-count settings removed in favor of child-size constraints.
 - NEW required fields per level:
     * min_children_size / max_children_size  (FULL oligo length, i.e., body + overlaps)
-- Optional:
-    * body_max_safety_buffer  (keeps pre-overlap bodies under max_children_size with slack)
 """
 
 from __future__ import annotations
@@ -62,9 +60,6 @@ class LevelConfig:
 
     # Legacy compat (assembler passes enforce_span=False anyway)
     max_gap_allowed: int = 0
-
-    # Optional slack to keep pre-overlap bodies below max
-    body_max_safety_buffer: Optional[int] = None
 
     # Attempt to force-reduce the number of bodies by up to this amount (0 = no deduction)
     force_body_count_deduction: int = 0
@@ -140,11 +135,6 @@ def load_levels_config(path: Path | str) -> Dict[int, LevelConfig]:
         disallowed = entry.get("overlap_disallowed_motifs") or []
         allowed = entry.get("overlap_allowed_motifs") or {}
 
-        body_buf = entry.get("body_max_safety_buffer")
-        body_buf = None if body_buf is None else int(body_buf)
-        if body_buf is not None and body_buf < 0:
-            raise ValueError(f"[L{level}] body_max_safety_buffer must be >= 0")
-
         force_deduct = int(entry.get("force_body_count_deduction", 0))
         if force_deduct < 0:
             raise ValueError(f"[L{level}] force_body_count_deduction must be >= 0")
@@ -168,7 +158,6 @@ def load_levels_config(path: Path | str) -> Dict[int, LevelConfig]:
             overlap_disallowed_motifs=[str(m).upper() for m in disallowed],
             overlap_allowed_motifs={str(k).upper(): float(v) for k, v in allowed.items()},
             max_gap_allowed=max_gap_allowed,
-            body_max_safety_buffer=body_buf,
             force_body_count_deduction=force_deduct,
             enforce_even_children_count=enforce_even,
         )

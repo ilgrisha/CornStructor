@@ -17,8 +17,6 @@
     "overlap_run_max": 5,
 
     "force_body_count_deduction": 3,
-    "enforce_even_children_count": true,
-
-    "body_max_safety_buffer": 15
+    "enforce_even_children_count": true
   }
 ]
